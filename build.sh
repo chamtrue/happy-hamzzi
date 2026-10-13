@@ -6,7 +6,7 @@ APP="Happy Hamzzi.app"; rm -rf "$APP" Hamster.app; mkdir -p "$APP/Contents/MacOS
 cp app/Info.plist "$APP/Contents/"; cp app/AppIcon.icns "$APP/Contents/Resources/"
 cp -R frames "$APP/Contents/Resources/"
 swiftc -O -framework AppKit -framework EventKit -framework IOKit -framework CoreLocation -framework SwiftUI -framework ServiceManagement app/main.swift -o "$APP/Contents/MacOS/hamster"
-codesign -s "Happy Hamzzi Dev" --force --deep "$APP" 2>/dev/null || codesign -s - --force --deep "$APP" >/dev/null 2>&1
+codesign -s "Happy Hamzzi Dev" --force "$APP" || { echo "서명 실패: Happy Hamzzi Dev 인증서가 키체인에 있어야 해요"; exit 1; }
 echo "built $APP"
 if [ "$1" = "install" ]; then
   pkill -f "Happy Hamzzi.app/Contents/MacOS/hamster" 2>/dev/null; sleep 0.5

@@ -248,6 +248,7 @@ enum Sensors {
         let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript"); p.arguments = ["-e", src]
         let pipe = Pipe(); p.standardOutput = pipe; p.standardError = FileHandle.nullDevice
         guard (try? p.run()) != nil else { return [:] }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 5) { if p.isRunning { p.terminate() } }  // 자동화 팝업 등으로 멈추면 5초 뒤 정리
         let data = pipe.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit()
         guard let r = String(data: data, encoding: .utf8) else { return [:] }
         var out: [String: String] = [:]
@@ -259,7 +260,11 @@ enum Sensors {
 // MARK: - 캘린더
 final class CalendarWatch {
     let store = EKEventStore(); var events: [EKEvent] = []; var all: [EKEvent] = []; var granted = false
-    init() { store.requestFullAccessToEvents { ok, _ in self.granted = ok; if ok { self.refresh() } } }
+    var requested = false
+    func requestAccess() {
+        guard !requested else { return }; requested = true
+        store.requestFullAccessToEvents { ok, _ in DispatchQueue.main.async { self.granted = ok; if ok { self.refresh() } } }  // 배열은 메인에서만 만진다
+    }
     func refresh() {
         guard granted else { return }
         let p = store.predicateForEvents(withStart: Calendar.current.startOfDay(for: Date()), end: Date().addingTimeInterval(86400 * 14), calendars: nil)
@@ -273,7 +278,9 @@ final class CalendarWatch {
 // MARK: - 날씨 (위치 서비스 + Open-Meteo)
 final class Weather: NSObject, CLLocationManagerDelegate {
     let lm = CLLocationManager(); var coord: CLLocationCoordinate2D?; var condition: String? = nil; var lastFetch = Date.distantPast
-    override init() { super.init(); lm.delegate = self; lm.desiredAccuracy = kCLLocationAccuracyKilometer; lm.requestWhenInUseAuthorization(); lm.startUpdatingLocation() }
+    var started = false
+    override init() { super.init(); lm.delegate = self; lm.desiredAccuracy = kCLLocationAccuracyKilometer }
+    func start() { guard !started else { return }; started = true; lm.requestWhenInUseAuthorization(); lm.startUpdatingLocation() }
     func locationManager(_ m: CLLocationManager, didUpdateLocations locs: [CLLocation]) { coord = locs.last?.coordinate; m.stopUpdatingLocation(); fetch() }
     func locationManager(_ m: CLLocationManager, didFailWithError e: Error) { NSLog("위치 실패: \(e.localizedDescription)") }
     func fetch() {
@@ -305,23 +312,36 @@ enum ClaudeHooks {
         return sid + (state.map { "echo \($0) > \"$HOME/.hamster.d/${sid:-default}\"" } ?? "rm -f \"$HOME/.hamster.d/${sid:-default}\"")
     }
     static let hookMarker = ".hamster"
-    static func load() -> [String: Any] {
-        (try? Data(contentsOf: settings)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+    enum HookError: LocalizedError {
+        case unreadable, badHooks
+        var errorDescription: String? { self == .unreadable ? "settings.json 을 읽을 수 없어요 (JSON 오류). 손으로 고친 뒤 다시 시도해 주세요" : "settings.json 의 hooks 가 예상한 형식이 아니에요" }
+    }
+    /// 파일이 없으면 빈 설정, 있는데 못 읽으면 에러 — 멀쩡한 설정을 날려 먹지 않기 위해
+    static func load() throws -> [String: Any] {
+        guard FileManager.default.fileExists(atPath: settings.path) else { return [:] }
+        guard let data = try? Data(contentsOf: settings), let d = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw HookError.unreadable }
+        if let h = d["hooks"], !(h is [String: Any]) { throw HookError.badHooks }
+        return d
     }
     static func isHamster(_ entry: [String: Any]) -> Bool {
-        ((entry["hooks"] as? [[String: Any]]) ?? []).contains { ($0["command"] as? String)?.contains(".hamster") == true }
+        ((entry["hooks"] as? [[String: Any]]) ?? []).contains { c in
+            let cmd = c["command"] as? String ?? ""
+            return cmd.contains(".hamster.d/${sid") || cmd.hasSuffix("> ~/.hamster") || cmd.contains("> ~/.hamster.d/")  // 우리가 만든 명령 형태만
+        }
     }
     /// 연결된 이벤트 수 (7이면 완전 연결)
     static var connectedCount: Int {
-        let hooks = load()["hooks"] as? [String: Any] ?? [:]
+        let hooks = ((try? load())?["hooks"] as? [String: Any]) ?? [:]
         return events.filter { e in ((hooks[e.0] as? [[String: Any]]) ?? []).contains(where: isHamster) }.count
     }
     static func save(_ d: [String: Any]) throws {
-        if FileManager.default.fileExists(atPath: settings.path) { try? FileManager.default.copyItem(at: settings, to: settings.appendingPathExtension("bak-hamzzi")) }
-        try JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .withoutEscapingSlashes, .sortedKeys]).write(to: settings)
+        let bak = settings.appendingPathExtension("bak-hamzzi")
+        if FileManager.default.fileExists(atPath: settings.path) { try? FileManager.default.removeItem(at: bak); try FileManager.default.copyItem(at: settings, to: bak) }  // 매번 새 백업
+        try FileManager.default.createDirectory(at: settings.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .withoutEscapingSlashes, .sortedKeys]).write(to: settings, options: .atomic)
     }
     static func connect() throws {
-        var d = load(); var hooks = d["hooks"] as? [String: Any] ?? [:]
+        var d = try load(); var hooks = d["hooks"] as? [String: Any] ?? [:]
         for (ev, matcher, state) in events {
             var list = hooks[ev] as? [[String: Any]] ?? []
             if list.contains(where: isHamster) { continue }
@@ -332,7 +352,7 @@ enum ClaudeHooks {
         d["hooks"] = hooks; try save(d)
     }
     static func disconnect() throws {
-        var d = load(); var hooks = d["hooks"] as? [String: Any] ?? [:]
+        var d = try load(); var hooks = d["hooks"] as? [String: Any] ?? [:]
         for (ev, _, _) in events { if let list = hooks[ev] as? [[String: Any]] { hooks[ev] = list.filter { !isHamster($0) } } }
         d["hooks"] = hooks; try save(d)
     }
@@ -375,7 +395,8 @@ final class Updater: ObservableObject {
         URLSession.shared.dataTask(with: req) { _, resp, err in
             DispatchQueue.main.async {
                 self.lastChecked = Date(); defaults.set(Date(), forKey: "updateLastChecked")
-                guard let final = resp?.url, final.path.contains("/releases/tag/"), let tag = final.pathComponents.last else {
+                guard let final = resp?.url, final.path.contains("/releases/tag/"), let tag = final.pathComponents.last,
+                      tag.range(of: "^v?[0-9]+(\\.[0-9]+){0,3}$", options: .regularExpression) != nil else {  // 태그는 버전 형식만 허용
                     self.state = .error(err?.localizedDescription ?? "릴리스 페이지를 못 읽었어요 (\((resp as? HTTPURLResponse)?.statusCode ?? 0))"); completion?(false); return
                 }
                 let version = tag.trimmingCharacters(in: CharacterSet(charactersIn: "v"))
@@ -388,16 +409,18 @@ final class Updater: ObservableObject {
     /// zip 을 받아 풀고 서명·번들 ID 를 확인한 뒤, 앱을 끄고 교체·재실행하는 스크립트를 띄운다
     func install() {
         guard let (version, url) = available else { return }
+        guard Bundle.main.bundleIdentifier != nil, Bundle.main.bundleURL.pathExtension == "app" else { state = .error("앱 번들이 아닌 상태라 자동 설치를 할 수 없어요"); return }
         state = .downloading(0)
-        let task = URLSession.shared.downloadTask(with: url) { tmp, _, err in
+        let task = URLSession.shared.downloadTask(with: url) { tmp, resp, err in
             DispatchQueue.main.async {
-                guard let tmp else { self.state = .error(err?.localizedDescription ?? "다운로드 실패"); return }
+                guard let tmp, (resp as? HTTPURLResponse)?.statusCode == 200 else { self.state = .error(err?.localizedDescription ?? "다운로드 실패 (HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0))"); return }
                 self.state = .installing
                 do {
                     let work = FileManager.default.temporaryDirectory.appendingPathComponent("hamzzi-update-\(version)")
                     try? FileManager.default.removeItem(at: work); try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
                     let zip = work.appendingPathComponent("update.zip"); try FileManager.default.moveItem(at: tmp, to: zip)
                     let unzip = Process(); unzip.executableURL = URL(fileURLWithPath: "/usr/bin/ditto"); unzip.arguments = ["-x", "-k", zip.path, work.path]; try unzip.run(); unzip.waitUntilExit()
+                    guard unzip.terminationStatus == 0 else { throw NSError(domain: "hamzzi", code: 3, userInfo: [NSLocalizedDescriptionKey: "zip 을 풀 수 없어요 (손상됐거나 불완전)"]) }
                     let newApp = work.appendingPathComponent("Happy Hamzzi.app")
                     guard FileManager.default.fileExists(atPath: newApp.path) else { throw NSError(domain: "hamzzi", code: 1, userInfo: [NSLocalizedDescriptionKey: "zip 안에 앱이 없어요"]) }
                     // 서명 검증: 제작자 인증서 지문(SHA-1)과 번들 ID 를 고정 요구사항으로 검사한다. 이름만 같은 다른 인증서는 통과 못 함
@@ -408,7 +431,7 @@ final class Updater: ObservableObject {
                     // 교체 스크립트: 경로는 문자열에 끼워 넣지 않고 인자로 넘긴다
                     let script = """
                     while kill -0 "$1" 2>/dev/null; do sleep 0.3; done
-                    rm -rf "$3"; mv "$2" "$3" && xattr -dr com.apple.quarantine "$3" 2>/dev/null
+                    if rm -rf "$3" && mv "$2" "$3"; then xattr -dr com.apple.quarantine "$3" 2>/dev/null; fi
                     open "$3"; rm -rf "$4"
                     """
                     let sh = Process(); sh.executableURL = URL(fileURLWithPath: "/bin/sh")
@@ -529,13 +552,13 @@ struct AgendaView: View {
                         HStack { Text(i == 0 ? "오늘" : i == 1 ? "내일" : fmt(day, "EEEE")).font(.caption.bold()).foregroundStyle(i == 0 ? Color.accentColor : .primary); Text(fmt(day, "M월 d일")).font(.caption).foregroundStyle(.secondary) }
                             .padding(.top, i == 0 ? 0 : 6)
                         if evs.isEmpty { Text("일정 없음").font(.caption).foregroundStyle(.secondary).padding(.leading, 4) }
-                        ForEach(evs, id: \.eventIdentifier) { e in
+                        ForEach(Array(evs.enumerated()), id: \.offset) { _, e in
                             HStack(alignment: .top, spacing: 8) {
                                 VStack(alignment: .trailing, spacing: 0) {
                                     Text(e.isAllDay ? "종일" : fmt(e.startDate, "a h:mm")).font(.caption)
                                     if !e.isAllDay { Text(dur(e)).font(.caption2).foregroundStyle(.secondary) }
                                 }.frame(width: 58, alignment: .trailing)
-                                RoundedRectangle(cornerRadius: 2).fill(Color(cgColor: e.calendar.cgColor)).frame(width: 3)
+                                RoundedRectangle(cornerRadius: 2).fill(e.calendar.map { Color(cgColor: $0.cgColor) } ?? Color.secondary).frame(width: 3)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(e.title ?? "").font(.callout).lineLimit(1)
                                     if let l = e.location, !l.isEmpty { Text(l).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
@@ -614,10 +637,10 @@ struct AgendaView: View {
 // MARK: - 설정 창 (탭: 모습 · 하루 리듬 · 건강 · 알림 · 시스템)
 struct PermissionStatus { let calendar: Bool; let location: Bool; let accessibility: Bool }
 struct SettingsView: View {
-    let art: Art; let preview: (String, String) -> NSImage; let status: () -> PermissionStatus; let updater: Updater
+    let art: Art; let preview: (String, String) -> NSImage; let status: () -> PermissionStatus; let updater: Updater; let request: (String) -> Void
     @State var tab: String
-    init(initialTab: String? = nil, updater: Updater, art: Art, preview: @escaping (String, String) -> NSImage, status: @escaping () -> PermissionStatus) {
-        self.art = art; self.preview = preview; self.status = status; self.updater = updater
+    init(initialTab: String? = nil, updater: Updater, art: Art, preview: @escaping (String, String) -> NSImage, status: @escaping () -> PermissionStatus, request: @escaping (String) -> Void = { _ in }) {
+        self.art = art; self.preview = preview; self.status = status; self.updater = updater; self.request = request
         _tab = State(initialValue: initialTab ?? ProcessInfo.processInfo.environment["HAMSTER_TEST_SETTINGS"].flatMap { $0.count > 1 ? $0 : nil } ?? "모습")
     }
     var body: some View {
@@ -626,7 +649,7 @@ struct SettingsView: View {
             RhythmTab().tabItem { Label("하루 리듬", systemImage: "sun.horizon") }.tag("하루 리듬")
             HealthTab().tabItem { Label("건강", systemImage: "heart") }.tag("건강")
             NotifyTab(art: art).tabItem { Label("알림", systemImage: "bell") }.tag("알림")
-            SystemTab(status: status, updater: updater).tabItem { Label("시스템", systemImage: "gearshape") }.tag("시스템")
+            SystemTab(status: status, request: request, updater: updater).tabItem { Label("시스템", systemImage: "gearshape") }.tag("시스템")
         }.padding(.top, 6).frame(width: 520, height: 520)
     }
 }
@@ -756,6 +779,7 @@ struct NotifyTab: View {
 }
 struct SystemTab: View {
     let status: () -> PermissionStatus
+    var request: (String) -> Void = { _ in }
     @ObservedObject var updater: Updater
     @AppStorage("autoUpdateCheck") var autoCheck = true
     @State var login = SMAppService.mainApp.status == .enabled
@@ -770,7 +794,7 @@ struct SystemTab: View {
             Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.circle").foregroundStyle(ok ? .green : .orange)
             VStack(alignment: .leading, spacing: 1) { Text(name); Text(what).font(.caption).foregroundStyle(.secondary) }
             Spacer()
-            if !ok { Button("설정 열기") { open(pane) } }
+            if !ok { Button("허용") { request(pane) } }
         }
     }
     var body: some View {
@@ -782,9 +806,9 @@ struct SystemTab: View {
                 }
             }
             Section("권한") {
-                perm("캘린더", "회의 5분 전 · 회의 중 · 일정 팝오버", st.calendar, "Privacy_Calendars")
-                perm("위치", "날씨 (비 · 눈 · 더위)", st.location, "Privacy_LocationServices")
-                perm("손쉬운 사용", "Dock 배지 읽기 (슬랙 · 카톡 · 아웃룩 알림)", st.accessibility, "Privacy_Accessibility")
+                perm("캘린더", "회의 5분 전 · 회의 중 · 일정 팝오버", st.calendar, "calendar")
+                perm("위치", "날씨 (비 · 눈 · 더위)", st.location, "location")
+                perm("손쉬운 사용", "Dock 배지 읽기 (슬랙 · 카톡 · 아웃룩 알림)", st.accessibility, "accessibility")
             }
             Section {
                 if !ClaudeHooks.claudeInstalled {
@@ -889,11 +913,12 @@ struct OnboardingView: View {
     let status: () -> PermissionStatus
     let openSettings: () -> Void
     let close: () -> Void
+    let request: (String) -> Void
     @State var page: Int
     @State var st = PermissionStatus(calendar: false, location: false, accessibility: false)
     @State var hooks = ClaudeHooks.connectedCount
-    init(art: Art, skin: String, page: Int = 0, status: @escaping () -> PermissionStatus, openSettings: @escaping () -> Void, close: @escaping () -> Void) {
-        self.art = art; self.skin = skin; self.status = status; self.openSettings = openSettings; self.close = close; _page = State(initialValue: page)
+    init(art: Art, skin: String, page: Int = 0, status: @escaping () -> PermissionStatus, openSettings: @escaping () -> Void, close: @escaping () -> Void, request: @escaping (String) -> Void = { _ in }) {
+        self.art = art; self.skin = skin; self.status = status; self.openSettings = openSettings; self.close = close; self.request = request; _page = State(initialValue: page)
     }
     func pane(_ p: String) { if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(p)") { NSWorkspace.shared.open(u) } }
     func anim(_ a: Anim?, size: CGFloat) -> some View {  // 프레임을 실제 속도로 돌린다
@@ -961,9 +986,9 @@ struct OnboardingView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("권한 설정").font(.title2.bold())
                         Text("필요한 것만, 원하는 순서로 켜면 돼요. 안 켜도 햄스터는 돌아가요. 나중에 설정 → 시스템에서도 할 수 있어요.").font(.caption).foregroundStyle(.secondary)
-                        row(1, "캘린더", "회의 5분 전 알람시계, 회의 중 헤드폰, 좌클릭 일정 보기. 아웃룩 일정은 시스템 설정 → 인터넷 계정 → Exchange 추가(캘린더만 켜기)로 맥 캘린더에 들어와요.", ok: st.calendar, action: "설정 열기") { pane("Privacy_Calendars") }
-                        row(2, "손쉬운 사용", "Dock 배지로 슬랙·카톡·아웃룩 알림을 알아채요. 타자 반응(봉고)도 이 권한을 써요. 키 내용은 읽지 않아요.", ok: st.accessibility, action: "설정 열기") { pane("Privacy_Accessibility") }
-                        row(3, "위치", "현재 위치 날씨로 비·눈·더위 코스튬. 30분마다 한 번, 약 1km 로 뭉갠 좌표만 보내요.", ok: st.location, action: "설정 열기") { pane("Privacy_LocationServices") }
+                        row(1, "캘린더", "회의 5분 전 알람시계, 회의 중 헤드폰, 좌클릭 일정 보기. 아웃룩 일정은 시스템 설정 → 인터넷 계정 → Exchange 추가(캘린더만 켜기)로 맥 캘린더에 들어와요.", ok: st.calendar, action: "허용") { request("calendar") }
+                        row(2, "손쉬운 사용", "Dock 배지로 슬랙·카톡·아웃룩 알림을 알아채요. 타자 반응(봉고)도 이 권한을 써요. 키 내용은 읽지 않아요.", ok: st.accessibility, action: "허용") { request("accessibility") }
+                        row(3, "위치", "현재 위치 날씨로 비·눈·더위 코스튬. 30분마다 한 번, 약 1km 로 뭉갠 좌표만 보내요.", ok: st.location, action: "허용") { request("location") }
                         row(4, "Claude Code 훅", ClaudeHooks.claudeInstalled ? "Claude가 일하면 쳇바퀴, 끝나면 체크, 승인 대기면 사이렌. ~/.claude/settings.json에 훅 7개를 넣어요(백업 후)." : "이 맥엔 Claude Code가 없어요. 나중에 설치하면 설정 → 시스템에서 연결할 수 있어요.",
                             ok: ClaudeHooks.claudeInstalled ? hooks == ClaudeHooks.events.count : nil, action: ClaudeHooks.claudeInstalled ? "연결" : nil) { try? ClaudeHooks.connect(); hooks = ClaudeHooks.connectedCount }
                     }
@@ -998,7 +1023,7 @@ final class Pet: NSObject {
     var event: (kind: String, app: String, since: Date)? = nil
     var queue: [(kind: String, app: String, at: Date)] = []
     var lastFired: [String: Date] = [:]
-    var badges: [String: String] = [:], firedMeetings: Set<String> = [], lastBadgePoll = Date.distantPast
+    var badges: [String: String] = [:], firedMeetings: Set<String> = [], lastBadgePoll = Date.distantPast, badgePolling = false
     var activeSince: Date? = nil, breakUntil: Date? = nil
     var testUntil: Date? = nil, testState: String? = nil
     let stateFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".hamster").path
@@ -1031,15 +1056,13 @@ final class Pet: NSObject {
         try? FileManager.default.createDirectory(atPath: stateDir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: stateDir)
         _ = Sensors.cpuPercent(); sense()
-        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] _ in self?.keystroke() }
+        syncKeyMonitor()  // 타자 반응을 켰을 때만 전역 키 모니터를 둔다
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.lastDrawn = [] }  // 손쉬운 사용 권한이 있어야 들어온다
         if SMAppService.mainApp.status == .notRegistered { try? SMAppService.mainApp.register() }  // 첫 실행에 로그인 항목 등록. 설정에서 끌 수 있다
         if !defaults.bool(forKey: "onboarded") { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.showOnboarding() } }
         DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in self?.autoCheckUpdate() }
         Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in self?.autoCheckUpdate() }
-        if !AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary) {
-            NSLog("손쉬운 사용 권한이 없어 Dock 배지를 못 읽는다")
-        }
+        if defaults.bool(forKey: "onboarded") { cal.requestAccess(); weather.start() }  // 처음이면 튜토리얼의 버튼에서 요청한다
     }
 
     // --- 입력 ---
@@ -1061,8 +1084,9 @@ final class Pet: NSObject {
         if let names = try? FileManager.default.contentsOfDirectory(atPath: stateDir) { files += names.filter { !$0.hasPrefix(".") && $0 != "cmd" && $0 != "activity.json" }.map { stateDir + "/" + $0 } }
         var states: [String: String] = [:]
         for f in files {
-            guard let attrs = try? FileManager.default.attributesOfItem(atPath: f), let m = attrs[.modificationDate] as? Date, Date().timeIntervalSince(m) < 2 * 3600,
-                  let s = try? String(contentsOfFile: f, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines) else { continue }
+            guard let attrs = try? FileManager.default.attributesOfItem(atPath: f), let m = attrs[.modificationDate] as? Date else { continue }
+            if f != stateFile, Date().timeIntervalSince(m) > 2 * 3600 { try? FileManager.default.removeItem(atPath: f); continue }  // 죽은 세션 파일 정리
+            guard let s = try? String(contentsOfFile: f, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines) else { continue }
             if s == "surprised", Date().timeIntervalSince(m) > 30 * 60 { continue }  // 세션이 죽어 남은 승인 대기는 30분 뒤 무시
             states[f] = s
             if s != lastSeen[f] {  // 바뀐 순간에만 이벤트
@@ -1080,6 +1104,8 @@ final class Pet: NSObject {
         // 활동(연속 사용) → 쉬어
         let idle = Sensors.idleSeconds(); idleSec = idle
         season = flag("seasonEnabled", true) ? seasonToday(now) : nil
+        syncKeyMonitor()
+        if defaults.bool(forKey: "onboarded") { self.cal.requestAccess(); weather.start() }  // sense() 안의 cal 은 Calendar 라 self 로 구분
         let asleep = activity == "sleep"
         if wasAsleep, !asleep, idle < 30 { fire("wake") }  // 자다가 입력이 돌아오면 기지개
         wasAsleep = asleep
@@ -1095,13 +1121,19 @@ final class Pet: NSObject {
         weather.fetch()
         // 회의
         inMeeting = self.cal.inMeeting(now)
-        if let e = self.cal.startingSoon(now), !firedMeetings.contains(e.eventIdentifier) { firedMeetings.insert(e.eventIdentifier); fire("meeting_soon") }
+        if let e = self.cal.startingSoon(now) {
+            let key = "\(e.eventIdentifier ?? "")|\(Int(e.startDate.timeIntervalSince1970))"  // 반복 회의는 회차마다
+            if !firedMeetings.contains(key) { firedMeetings.insert(key); fire("meeting_soon") }
+            firedMeetings = firedMeetings.filter { ($0.split(separator: "|").last).flatMap { Double($0) }.map { now.timeIntervalSince1970 - $0 < 86400 } ?? false }
+        }
         // Dock 배지: 배터리면 15초, 전원이면 5초
         if !watched.isEmpty, AXIsProcessTrusted(), now.timeIntervalSince(lastBadgePoll) >= ((bat?.onBattery ?? false) ? 15 : 5) {  // 감시 앱·권한 없으면 osascript 안 띄움
             lastBadgePoll = now
+            guard !badgePolling else { return }; badgePolling = true
             DispatchQueue.global().async { [self] in
                 let b = Sensors.dockBadges()
                 DispatchQueue.main.async {
+                    self.badgePolling = false
                     for app in self.watched {
                         guard let name = app.names.first(where: { b[$0] != nil }), let v = b[name] else { continue }
                         if let old = self.badges[app.logo], old != v { self.fire("notify", app: app.logo) }
@@ -1331,18 +1363,32 @@ final class Pet: NSObject {
     func showOnboardingPage(_ page: Int) {
         let view = OnboardingView(art: art, skin: skin, page: page, status: { [weak self] in PermissionStatus(calendar: self?.cal.granted ?? false, location: self?.weather.coord != nil, accessibility: AXIsProcessTrusted()) },
                                   openSettings: { [weak self] in self?.openSettings() },
-                                  close: { [weak self] in defaults.set(true, forKey: "onboarded"); self?.onboardingWindow?.close() })
+                                  close: { [weak self] in defaults.set(true, forKey: "onboarded"); self?.onboardingWindow?.close() },
+                                  request: { [weak self] what in self?.requestPermission(what) })
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 460), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         w.title = "Happy Hamzzi 시작하기"; w.contentViewController = NSHostingController(rootView: view); w.isReleasedWhenClosed = false; w.center()
         onboardingWindow = w; NSApp.activate(ignoringOtherApps: true); w.makeKeyAndOrderFront(nil)
         defaults.set(true, forKey: "onboarded")
+    }
+    /// 권한은 사용자가 버튼을 눌렀을 때만 요청한다 (튜토리얼·설정)
+    func requestPermission(_ what: String) {
+        switch what {
+        case "calendar": cal.requestAccess(); if cal.requested, !cal.granted { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!) }
+        case "location": weather.start()
+        case "accessibility":
+            if !AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary) {
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+            }
+        default: break
+        }
     }
     @objc func openSystemSettings() { settingsTab = "시스템"; settingsWindow = nil; openSettings() }
     var settingsTab: String? = nil
     @objc func openSettings() {
         if settingsWindow == nil {
             let view = SettingsView(initialTab: settingsTab, updater: updater, art: art, preview: { [weak self] skin, layout in self?.previewImage(skin: skin, layout: layout) ?? NSImage() },
-                                    status: { [weak self] in PermissionStatus(calendar: self?.cal.granted ?? false, location: self?.weather.coord != nil, accessibility: AXIsProcessTrusted()) })
+                                    status: { [weak self] in PermissionStatus(calendar: self?.cal.granted ?? false, location: self?.weather.coord != nil, accessibility: AXIsProcessTrusted()) },
+                                    request: { [weak self] in self?.requestPermission($0) })
             let hc = NSHostingController(rootView: view)
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 520), styleMask: [.titled, .closable], backing: .buffered, defer: false)
             w.title = "Happy Hamzzi 설정"; w.contentViewController = hc; w.setContentSize(NSSize(width: 520, height: 520)); w.isReleasedWhenClosed = false; w.center()
@@ -1362,6 +1408,12 @@ final class Pet: NSObject {
     }
     @objc func toggleFocus() {
         if focusUntil != nil { focusUntil = nil } else { focusUntil = Date().addingTimeInterval(Double(setting("focusMinutes", 25)) * 60); event = nil }
+    }
+    var keyMonitor: Any? = nil
+    func syncKeyMonitor() {
+        let on = flag("typingEnabled", false)
+        if on, keyMonitor == nil { keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] _ in self?.keystroke() } }
+        if !on, let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
     }
     func keystroke() {
         guard flag("typingEnabled", false) else { return }

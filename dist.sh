@@ -8,25 +8,30 @@ cat > dist/pkg/install.sh <<'IN'
 # 햄스터 설치: Applications 복사 → 로그인 자동 실행 → Claude Code 훅(있으면) → 실행
 set -e; cd "$(dirname "$0")"
 major=$(sw_vers -productVersion | cut -d. -f1); if [ "$major" -lt 14 ]; then echo "macOS 14 이상이 필요해요 (지금 $(sw_vers -productVersion))"; exit 1; fi
+pkill -f "Happy Hamzzi.app/Contents/MacOS/hamster" 2>/dev/null || true; sleep 0.5
 rm -rf "/Applications/Happy Hamzzi.app"; cp -R "Happy Hamzzi.app" /Applications/
 xattr -dr com.apple.quarantine "/Applications/Happy Hamzzi.app" 2>/dev/null || true
-if [ -f ~/.claude/settings.json ]; then
-python3 - <<'PY'
-import json, os
-p=os.path.expanduser('~/.claude/settings.json'); d=json.load(open(p)); d.setdefault('hooks',{})
+if [ -f ~/.claude/settings.json ] && command -v python3 >/dev/null 2>&1; then
+python3 - <<'PY' || echo "Claude Code 훅은 나중에 앱 설정 → 시스템에서 연결할 수 있어요"
+import json, os, sys
+p=os.path.expanduser('~/.claude/settings.json')
+try: d=json.load(open(p))
+except Exception as e: print('settings.json 을 읽지 못해 훅은 건너뜁니다:', e); sys.exit(1)
+if not isinstance(d.get('hooks',{}),dict): print('hooks 형식이 달라 건너뜁니다'); sys.exit(1)
+d.setdefault('hooks',{})
 SID="sid=$(grep -o '\"session_id\" *: *\"[^\"]*\"' | head -1 | sed 's/.*\"\\([^\"]*\\)\"$/\\1/' | tr -cd 'A-Za-z0-9_-' | cut -c1-64); mkdir -p ~/.hamster.d; chmod 700 ~/.hamster.d; "
 ev={'UserPromptSubmit':'working','PostToolUse':'working','Stop':'done','StopFailure':'faint','PostToolUseFailure':'faint','PermissionRequest':'surprised','SessionEnd':None}
 for e,s in ev.items():
     lst=d['hooks'].setdefault(e,[])
-    if any('.hamster' in h.get('command','') for x in lst for h in x.get('hooks',[])): continue
+    if any('.hamster.d/${sid' in h.get('command','') for x in lst for h in x.get('hooks',[])): continue
     c=SID+(f'echo {s} > "$HOME/.hamster.d/${{sid:-default}}"' if s else 'rm -f "$HOME/.hamster.d/${sid:-default}"')
     entry={'hooks':[{'type':'command','command':c}]}
     if e in ('PostToolUse','PostToolUseFailure','PermissionRequest'): entry={'matcher':'*',**entry}
     lst.append(entry)
-json.dump(d,open(p,'w'),indent=2,ensure_ascii=False); open(p,'a').write('\n'); print('Claude Code 훅 등록')
+import shutil; shutil.copy(p, p+'.bak-hamzzi')
+tmp=p+'.tmp'; json.dump(d,open(tmp,'w'),indent=2,ensure_ascii=False); open(tmp,'a').write('\n'); os.replace(tmp,p); print('Claude Code 훅 등록')
 PY
 fi
-pkill -f "Happy Hamzzi.app/Contents/MacOS/hamster" 2>/dev/null || true
 open "/Applications/Happy Hamzzi.app"
 echo "설치 완료. 앱이 로그인 항목에 스스로 등록돼요(설정에서 끌 수 있음). 메뉴바 햄스터 우클릭 → 설정…"
 echo "권한: 캘린더(회의), 자동화·손쉬운 사용(슬랙·카톡 배지)은 처음 뜨는 팝업에서 허용. 노치 맥북은 ⌘+드래그로 시계 쪽에 옮기세요."
@@ -95,7 +100,7 @@ cat > dist/pkg/README.md <<'RM'
 ## 프라이버시
 
 - 모든 데이터는 이 맥 안에만 있어요. 서버 없음, 계정 없음.
-- 밖으로 나가는 요청은 날씨(Open-Meteo, 위치 좌표만) 하나뿐이고 위치 권한을 안 주면 그것도 없어요.
+- 밖으로 나가는 요청은 두 가지예요. 날씨(Open-Meteo, 약 1km로 뭉갠 좌표만, 위치 권한 없으면 안 보냄)와 GitHub 릴리스 페이지의 버전 확인(하루 한 번, 설정에서 끌 수 있음). 업데이트 설치 때만 GitHub에서 zip을 받아요.
 - 타자 반응은 "눌렸다"는 횟수만 세고 어떤 키인지는 읽지 않아요. 기본은 꺼짐.
 - 볼주머니(클립보드)는 메모리에만 두고 앱을 끄면 사라져요. 설정에서 끌 수 있어요.
 - 상태 파일은 `~/.hamster.d/`(세션 상태·활동 횟수)뿐이에요.
