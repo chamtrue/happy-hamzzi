@@ -279,7 +279,8 @@ final class Weather: NSObject, CLLocationManagerDelegate {
     func fetch() {
         guard let c = coord, Date().timeIntervalSince(lastFetch) > 1800 else { return }
         lastFetch = Date()
-        guard let url = URL(string: "https://api.open-meteo.com/v1/forecast?latitude=\(c.latitude)&longitude=\(c.longitude)&current=temperature_2m,weather_code") else { return }
+        let lat = (c.latitude * 100).rounded() / 100, lon = (c.longitude * 100).rounded() / 100  // 약 1km 로 뭉개서 보낸다
+        guard let url = URL(string: "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&current=temperature_2m,weather_code") else { return }
         URLSession.shared.dataTask(with: URLRequest(url: url, timeoutInterval: 15)) { [weak self] data, _, _ in
             guard let data, let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let cur = j["current"] as? [String: Any],
                   let code = cur["weather_code"] as? Int, let temp = cur["temperature_2m"] as? Double else { return }
@@ -299,9 +300,11 @@ enum ClaudeHooks {
         ("UserPromptSubmit", nil, "working"), ("PostToolUse", "*", "working"), ("Stop", nil, "done"), ("StopFailure", nil, "faint"),
         ("PostToolUseFailure", "*", "faint"), ("PermissionRequest", "*", "surprised"), ("SessionEnd", nil, nil)]
     static func command(_ state: String?) -> String {
-        let sid = "sid=$(grep -o '\"session_id\" *: *\"[^\"]*\"' | head -1 | sed 's/.*\"\\([^\"]*\\)\"$/\\1/'); mkdir -p ~/.hamster.d; "
-        return sid + (state.map { "echo \($0) > ~/.hamster.d/${sid:-default}" } ?? "rm -f ~/.hamster.d/${sid:-default}")
+        // session_id 는 stdin JSON 에서 뽑되 영숫자·-·_ 만 남기고(경로 탈출 방지) 경로는 따옴표로 감싼다
+        let sid = "sid=$(grep -o '\"session_id\" *: *\"[^\"]*\"' | head -1 | sed 's/.*\"\\([^\"]*\\)\"$/\\1/' | tr -cd 'A-Za-z0-9_-' | cut -c1-64); mkdir -p ~/.hamster.d; chmod 700 ~/.hamster.d; "
+        return sid + (state.map { "echo \($0) > \"$HOME/.hamster.d/${sid:-default}\"" } ?? "rm -f \"$HOME/.hamster.d/${sid:-default}\"")
     }
+    static let hookMarker = ".hamster"
     static func load() -> [String: Any] {
         (try? Data(contentsOf: settings)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
     }
@@ -353,6 +356,7 @@ final class Activity {
 // MARK: - 업데이트 (GitHub Releases)
 final class Updater: ObservableObject {
     static let repo = "chamtrue/happy-hamzzi"
+    static let certSHA1 = "5804DEAA43655A2249C7272B52BDE60D212570D6"  // "Happy Hamzzi Dev" 서명 인증서. 바꾸면 기존 설치본이 새 버전을 거부하니 주의
     enum State: Equatable { case idle, checking, upToDate, available(String, URL, String), downloading(Double), installing, error(String) }
     @Published var state: State = .idle
     @Published var lastChecked: Date? = defaults.object(forKey: "updateLastChecked") as? Date
@@ -363,20 +367,20 @@ final class Updater: ObservableObject {
         for i in 0..<max(pa.count, pb.count) { let x = i < pa.count ? pa[i] : 0, y = i < pb.count ? pb[i] : 0; if x != y { return x > y } }
         return false
     }
+    /// API 는 비인증 시간당 60회 제한(사무실 공유 IP 에서 금방 막힘)이라, releases/latest 가 리다이렉트하는 태그 주소를 읽는다
     func check(manual: Bool = false, completion: ((Bool) -> Void)? = nil) {
         if case .downloading = state { return }
         state = .checking
-        var req = URLRequest(url: URL(string: "https://api.github.com/repos/\(Self.repo)/releases/latest")!, timeoutInterval: 15)
-        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        URLSession.shared.dataTask(with: req) { data, resp, err in
+        var req = URLRequest(url: URL(string: "https://github.com/\(Self.repo)/releases/latest")!, timeoutInterval: 15); req.httpMethod = "HEAD"
+        URLSession.shared.dataTask(with: req) { _, resp, err in
             DispatchQueue.main.async {
                 self.lastChecked = Date(); defaults.set(Date(), forKey: "updateLastChecked")
-                guard let data, let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let tag = j["tag_name"] as? String else {
-                    self.state = .error(err?.localizedDescription ?? "릴리스 정보를 못 읽었어요 (\((resp as? HTTPURLResponse)?.statusCode ?? 0))"); completion?(false); return
+                guard let final = resp?.url, final.path.contains("/releases/tag/"), let tag = final.pathComponents.last else {
+                    self.state = .error(err?.localizedDescription ?? "릴리스 페이지를 못 읽었어요 (\((resp as? HTTPURLResponse)?.statusCode ?? 0))"); completion?(false); return
                 }
-                let assets = j["assets"] as? [[String: Any]] ?? []
-                let zip = assets.first { ($0["name"] as? String)?.hasSuffix(".zip") == true }.flatMap { ($0["browser_download_url"] as? String).flatMap(URL.init) }
-                if Self.newer(tag, than: self.current), let zip { self.state = .available(tag, zip, j["body"] as? String ?? ""); completion?(true) }
+                let version = tag.trimmingCharacters(in: CharacterSet(charactersIn: "v"))
+                let zip = URL(string: "https://github.com/\(Self.repo)/releases/download/\(tag)/HappyHamzzi-\(version).zip")!
+                if Self.newer(tag, than: self.current) { self.state = .available(tag, zip, ""); completion?(true) }
                 else { self.state = .upToDate; completion?(false) }
             }
         }.resume()
@@ -396,18 +400,19 @@ final class Updater: ObservableObject {
                     let unzip = Process(); unzip.executableURL = URL(fileURLWithPath: "/usr/bin/ditto"); unzip.arguments = ["-x", "-k", zip.path, work.path]; try unzip.run(); unzip.waitUntilExit()
                     let newApp = work.appendingPathComponent("Happy Hamzzi.app")
                     guard FileManager.default.fileExists(atPath: newApp.path) else { throw NSError(domain: "hamzzi", code: 1, userInfo: [NSLocalizedDescriptionKey: "zip 안에 앱이 없어요"]) }
-                    // 서명 검증: 번들 ID 가 같은지
-                    let cs = Process(); cs.executableURL = URL(fileURLWithPath: "/usr/bin/codesign"); cs.arguments = ["-dv", newApp.path]
-                    let pipe = Pipe(); cs.standardError = pipe; cs.standardOutput = FileHandle.nullDevice; try cs.run(); cs.waitUntilExit()
-                    let info = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                    guard info.contains("Identifier=\(Bundle.main.bundleIdentifier ?? "com.gipeum.happyhamzzi")") else { throw NSError(domain: "hamzzi", code: 2, userInfo: [NSLocalizedDescriptionKey: "서명 확인 실패: 번들 ID 가 달라요"]) }
-                    let target = Bundle.main.bundleURL
+                    // 서명 검증: 제작자 인증서 지문(SHA-1)과 번들 ID 를 고정 요구사항으로 검사한다. 이름만 같은 다른 인증서는 통과 못 함
+                    let req = "identifier \"\(Bundle.main.bundleIdentifier ?? "com.gipeum.happyhamzzi")\" and certificate leaf = H\"\(Self.certSHA1)\""
+                    let cs = Process(); cs.executableURL = URL(fileURLWithPath: "/usr/bin/codesign"); cs.arguments = ["--verify", "--deep", "--strict", "-R=\(req)", newApp.path]
+                    cs.standardError = FileHandle.nullDevice; cs.standardOutput = FileHandle.nullDevice; try cs.run(); cs.waitUntilExit()
+                    guard cs.terminationStatus == 0 else { throw NSError(domain: "hamzzi", code: 2, userInfo: [NSLocalizedDescriptionKey: "서명 확인 실패: 제작자 인증서가 아니에요"]) }
+                    // 교체 스크립트: 경로는 문자열에 끼워 넣지 않고 인자로 넘긴다
                     let script = """
-                    while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.3; done
-                    rm -rf "\(target.path)"; mv "\(newApp.path)" "\(target.path)"; xattr -dr com.apple.quarantine "\(target.path)" 2>/dev/null
-                    open "\(target.path)"; rm -rf "\(work.path)"
+                    while kill -0 "$1" 2>/dev/null; do sleep 0.3; done
+                    rm -rf "$3"; mv "$2" "$3" && xattr -dr com.apple.quarantine "$3" 2>/dev/null
+                    open "$3"; rm -rf "$4"
                     """
-                    let sh = Process(); sh.executableURL = URL(fileURLWithPath: "/bin/sh"); sh.arguments = ["-c", script]; try sh.run()
+                    let sh = Process(); sh.executableURL = URL(fileURLWithPath: "/bin/sh")
+                    sh.arguments = ["-c", script, "hamzzi-update", String(ProcessInfo.processInfo.processIdentifier), newApp.path, Bundle.main.bundleURL.path, work.path]; try sh.run()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { NSApp.terminate(nil) }
                 } catch { self.state = .error(error.localizedDescription) }
             }
@@ -430,6 +435,8 @@ final class Pouch {
         let pb = NSPasteboard.general
         guard pb.changeCount != lastChange else { return false }
         lastChange = pb.changeCount
+        let secret = ["org.nspasteboard.ConcealedType", "org.nspasteboard.TransientType", "com.agilebits.onepassword", "com.apple.passwordmanager"]
+        if pb.types?.contains(where: { t in secret.contains { t.rawValue.hasPrefix($0) } }) == true { return false }  // 비밀번호 관리자 등이 숨김 표시한 건 담지 않는다
         guard let s = pb.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty, s.count < 20_000 else { return false }
         items.removeAll { $0.text == s }; items.insert(Item(text: s, at: Date()), at: 0); items = Array(items.prefix(5))
         return true
@@ -963,6 +970,8 @@ final class Pet: NSObject {
         Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in self?.tick() }
         Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.sense() }
         Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.cal.refresh() }
+        try? FileManager.default.createDirectory(atPath: stateDir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: stateDir)
         _ = Sensors.cpuPercent(); sense()
         NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] _ in self?.keystroke() }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.lastDrawn = [] }  // 손쉬운 사용 권한이 있어야 들어온다

@@ -14,12 +14,12 @@ if [ -f ~/.claude/settings.json ]; then
 python3 - <<'PY'
 import json, os
 p=os.path.expanduser('~/.claude/settings.json'); d=json.load(open(p)); d.setdefault('hooks',{})
-SID="sid=$(grep -o '\"session_id\" *: *\"[^\"]*\"' | head -1 | sed 's/.*\"\\([^\"]*\\)\"$/\\1/'); mkdir -p ~/.hamster.d; "
+SID="sid=$(grep -o '\"session_id\" *: *\"[^\"]*\"' | head -1 | sed 's/.*\"\\([^\"]*\\)\"$/\\1/' | tr -cd 'A-Za-z0-9_-' | cut -c1-64); mkdir -p ~/.hamster.d; chmod 700 ~/.hamster.d; "
 ev={'UserPromptSubmit':'working','PostToolUse':'working','Stop':'done','StopFailure':'faint','PostToolUseFailure':'faint','PermissionRequest':'surprised','SessionEnd':None}
 for e,s in ev.items():
     lst=d['hooks'].setdefault(e,[])
     if any('.hamster' in h.get('command','') for x in lst for h in x.get('hooks',[])): continue
-    c=SID+(f"echo {s} > ~/.hamster.d/${{sid:-default}}" if s else "rm -f ~/.hamster.d/${sid:-default}")
+    c=SID+(f'echo {s} > "$HOME/.hamster.d/${{sid:-default}}"' if s else 'rm -f "$HOME/.hamster.d/${sid:-default}"')
     entry={'hooks':[{'type':'command','command':c}]}
     if e in ('PostToolUse','PostToolUseFailure','PermissionRequest'): entry={'matcher':'*',**entry}
     lst.append(entry)
