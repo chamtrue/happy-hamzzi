@@ -631,11 +631,11 @@ struct SettingsView: View {
     }
 }
 struct AppearanceTab: View {
-    @AppStorage("skin") var skin = "A"
+    @AppStorage("skin") var skin = "SC"
     @AppStorage("layout") var layout = "A"
     @AppStorage("typingEnabled") var typing = false
     @AppStorage("accessory") var accessory = ""
-    @State var family = isFamilyB(UserDefaults.standard.string(forKey: "skin") ?? "A") ? "B" : "A"
+    @State var family = isFamilyB(UserDefaults.standard.string(forKey: "skin") ?? "SC") ? "B" : "A"
     let art: Art; let preview: (String, String) -> NSImage
     var familySkins: [(String, String)] { art.skinNames.filter { family == "B" ? isFamilyB($0.0) : !isFamilyB($0.0) } }
     var body: some View {
@@ -659,10 +659,10 @@ struct AppearanceTab: View {
             }
             Section {
                 Picker("액세서리", selection: $accessory) { ForEach(ACCESSORY_LABEL, id: \.0) { Text($0.1).tag($0.0) } }
-            } header: { Text("액세서리") } footer: { Text("항상 쓰고 있어요. 계절 코스튬보다 우선하고, 쳇바퀴·구르기·빼꼼 중엔 잠깐 벗어요.") }
+            } header: { Text("액세서리") } footer: { Text("항상 쓰고 있어요. 계절 코스튬보다 우선하고, 쳇바퀴·구르기·빼꼼 중엔 잠깐 벗어요.").frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading) }
             Section {
                 Toggle("타자 반응 (봉고 햄스터)", isOn: $typing)
-            } header: { Text("반응") } footer: { Text("키를 누를 때마다 귀가 쫑긋하고, 2초에 8타 넘게 치면 햄스터가 키보드를 꺼내 같이 쳐요. 어떤 키인지는 읽지 않고 눌린 횟수만 세요. 손쉬운 사용 권한이 필요해요.") }
+            } header: { Text("반응") } footer: { Text("키를 누를 때마다 귀가 쫑긋하고, 2초에 8타 넘게 치면 햄스터가 키보드를 꺼내 같이 쳐요. 어떤 키인지는 읽지 않고 눌린 횟수만 세요. 손쉬운 사용 권한이 필요해요.").frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading) }
             Section("레이아웃") {
                 ForEach([("S", "22px 단독", "핵심 7개 상태만. 그 밖의 상태는 그 순간만 44px로 넓어져요"),
                          ("A", "44px 햄스터 + 소품", "추천. 소품이 햄스터와 같은 크기로 보여요"),
@@ -723,15 +723,15 @@ struct HealthTab: View {
             Section {
                 Stepper(value: $focusMinutes, in: 15...90, step: 5) { LabeledContent("세션 길이", value: "\(focusMinutes)분") }
                 Toggle("집중 중엔 슬랙·카톡 봉투 안 띄우기", isOn: $focusQuiet)
-            } header: { Text("집중 세션") } footer: { Text("일정 팝오버나 우클릭 메뉴에서 시작해요. 쳇바퀴를 돌고 소품 칸에 남은 시간이 보이다가 끝나면 체크.") }
+            } header: { Text("집중 세션") } footer: { Text("일정 팝오버나 우클릭 메뉴에서 시작해요. 쳇바퀴를 돌고 소품 칸에 남은 시간이 보이다가 끝나면 체크.").frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading) }
             Section {
                 Toggle("연속 사용 알림 (커피)", isOn: $breakEnabled)
                 if breakEnabled { Stepper(value: $breakMinutes, in: 25...120, step: 5) { LabeledContent("쉬지 않고 쓴 지", value: "\(breakMinutes)분") } }
-            } header: { Text("쉬기") } footer: { Text("5분 이상 자리를 비우면 카운트가 처음부터 시작해요. 10분 동안 커피를 들고 있어요.") }
+            } header: { Text("쉬기") } footer: { Text("5분 이상 자리를 비우면 카운트가 처음부터 시작해요. 10분 동안 커피를 들고 있어요.").frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading) }
             Section {
                 Toggle("물 마시기 알림 (물병)", isOn: $waterEnabled)
                 if waterEnabled { Stepper(value: $waterMinutes, in: 30...180, step: 15) { LabeledContent("간격", value: "\(waterMinutes)분") } }
-            } header: { Text("물") } footer: { Text("물병을 든 동안 햄스터를 클릭하면 마신 것으로 기록하고 다음 간격을 다시 세요.") }
+            } header: { Text("물") } footer: { Text("물병을 든 동안 햄스터를 클릭하면 마신 것으로 기록하고 다음 간격을 다시 세요.").frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading) }
         }.formStyle(.grouped)
     }
 }
@@ -749,7 +749,7 @@ struct NotifyTab: View {
             Section {
                 row("슬랙", "slack", $watchSlack); row("카카오톡", "kakao", $watchKakao); row("아웃룩", "outlook", $watchOutlook); row("메일", "generic", $watchMail)
             } header: { Text("Dock 배지가 바뀌면 봉투를 들어요") } footer: {
-                Text(AXIsProcessTrusted() ? "손쉬운 사용 권한이 있어 배지를 읽고 있어요." : "손쉬운 사용 권한이 없어 배지를 못 읽어요. 시스템 탭에서 켜 주세요.")
+                Text(AXIsProcessTrusted() ? "손쉬운 사용 권한이 있어 배지를 읽고 있어요." : "손쉬운 사용 권한이 없어 배지를 못 읽어요. 시스템 탭에서 켜 주세요.").frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading)
             }
         }.formStyle(.grouped)
     }
@@ -802,10 +802,10 @@ struct SystemTab: View {
                     }
                     if let e = hookError { Text(e).font(.caption2).foregroundStyle(.red) }
                 }
-            } header: { Text("Claude Code") } footer: { Text("~/.claude/settings.json 의 hooks 에 7개 항목을 넣어요. 바꾸기 전 settings.json.bak-hamzzi 로 백업하고, 다른 훅은 건드리지 않아요. 연결 후 새로 여는 Claude 세션부터 반영돼요.") }
+            } header: { Text("Claude Code") } footer: { Text("~/.claude/settings.json 의 hooks 에 7개 항목을 넣어요. 바꾸기 전 settings.json.bak-hamzzi 로 백업하고, 다른 훅은 건드리지 않아요. 연결 후 새로 여는 Claude 세션부터 반영돼요.").frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading) }
             Section {
                 Toggle("볼주머니: 최근 복사한 글 5개 기억", isOn: $clipboard)
-            } header: { Text("클립보드") } footer: { Text("메모리에만 두고 파일로 저장하지 않아요. 앱을 끄면 사라져요. 일정 팝오버의 볼주머니 탭에서 다시 복사할 수 있어요.") }
+            } header: { Text("클립보드") } footer: { Text("메모리에만 두고 파일로 저장하지 않아요. 앱을 끄면 사라져요. 일정 팝오버의 볼주머니 탭에서 다시 복사할 수 있어요.").frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading) }
             Section {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
@@ -883,14 +883,40 @@ final class NotchTray {
     }
 }
 
-// MARK: - 첫 실행 안내
+// MARK: - 첫 실행 안내 (튜토리얼 3쪽 + 권한 설정 1쪽)
 struct OnboardingView: View {
+    let art: Art; let skin: String
     let status: () -> PermissionStatus
     let openSettings: () -> Void
     let close: () -> Void
+    @State var page: Int
     @State var st = PermissionStatus(calendar: false, location: false, accessibility: false)
     @State var hooks = ClaudeHooks.connectedCount
+    init(art: Art, skin: String, page: Int = 0, status: @escaping () -> PermissionStatus, openSettings: @escaping () -> Void, close: @escaping () -> Void) {
+        self.art = art; self.skin = skin; self.status = status; self.openSettings = openSettings; self.close = close; _page = State(initialValue: page)
+    }
     func pane(_ p: String) { if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(p)") { NSWorkspace.shared.open(u) } }
+    func anim(_ a: Anim?, size: CGFloat) -> some View {  // 프레임을 실제 속도로 돌린다
+        TimelineView(.periodic(from: .now, by: 0.12)) { ctx in
+            let frames = a?.frames ?? [], ticks = a?.ticks ?? []
+            let total = max(1, ticks.reduce(0, +)); var t = Int(ctx.date.timeIntervalSinceReferenceDate / 0.12) % total; var idx = 0
+            for (i, n) in ticks.enumerated() { if t < n { idx = i; break }; t -= n }
+            return Image(nsImage: frames.isEmpty ? NSImage() : frames[min(idx, frames.count - 1)]).interpolation(.none).resizable().frame(width: size, height: size)
+        }
+    }
+    func cell(_ state: String, _ title: String, _ sub: String) -> some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 2) { anim(art.hamster32(skin, state), size: 56); anim(art.prop(state, "n32/"), size: 56) }
+                .padding(6).background(Color.black).clipShape(RoundedRectangle(cornerRadius: 8))
+            Text(title).font(.caption.weight(.medium)); Text(sub).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+        }.frame(maxWidth: .infinity)
+    }
+    func how(_ symbol: String, _ title: String, _ body: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: symbol).font(.title3).foregroundStyle(Color.accentColor).frame(width: 26)
+            VStack(alignment: .leading, spacing: 2) { Text(title).font(.callout.weight(.medium)); Text(body).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+        }
+    }
     func row(_ n: Int, _ title: String, _ body: String, ok: Bool?, action: String? = nil, _ act: @escaping () -> Void = {}) -> some View {
         HStack(alignment: .top, spacing: 10) {
             ZStack { Circle().fill(ok == true ? Color.green : Color.accentColor.opacity(0.15)).frame(width: 22, height: 22); Text(ok == true ? "✓" : "\(n)").font(.caption.bold()).foregroundStyle(ok == true ? .white : Color.accentColor) }
@@ -900,26 +926,58 @@ struct OnboardingView: View {
         }
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 44, height: 44)
-                VStack(alignment: .leading) { Text("Happy Hamzzi에 오신 걸 환영해요").font(.title3.bold()); Text("메뉴바(또는 노치 아래)에 햄스터가 살아요. 클릭하면 쓰다듬기와 일정, 우클릭하면 메뉴예요.").font(.caption).foregroundStyle(.secondary) }
-            }
-            Divider()
-            Text("권한은 필요한 것만, 원하는 순서로 켜면 돼요. 안 켜도 햄스터는 돌아가요.").font(.caption).foregroundStyle(.secondary)
-            row(1, "캘린더", "회의 5분 전 알람시계, 회의 중 헤드폰, 좌클릭 일정 보기. 아웃룩 일정은 시스템 설정 → 인터넷 계정 → Exchange 추가(캘린더만 켜기)로 맥 캘린더에 들어와요.", ok: st.calendar, action: "설정 열기") { pane("Privacy_Calendars") }
-            row(2, "손쉬운 사용", "Dock 배지로 슬랙·카톡·아웃룩 알림을 알아채요. 타자 반응(봉고)도 이 권한을 써요. 키 내용은 읽지 않아요.", ok: st.accessibility, action: "설정 열기") { pane("Privacy_Accessibility") }
-            row(3, "위치", "현재 위치 날씨로 비·눈·더위 코스튬. 30분마다 한 번 조회해요.", ok: st.location, action: "설정 열기") { pane("Privacy_LocationServices") }
-            row(4, "Claude Code 훅", ClaudeHooks.claudeInstalled ? "Claude가 일하면 쳇바퀴, 끝나면 체크, 승인 대기면 사이렌. ~/.claude/settings.json에 훅 7개를 넣어요(백업 후)." : "이 맥엔 Claude Code가 없어요. 나중에 설치하면 설정 → 시스템에서 연결할 수 있어요.",
-                ok: ClaudeHooks.claudeInstalled ? hooks == ClaudeHooks.events.count : nil, action: ClaudeHooks.claudeInstalled ? "연결" : nil) { try? ClaudeHooks.connect(); hooks = ClaudeHooks.connectedCount }
+        VStack(alignment: .leading, spacing: 12) {
+            Group {
+                switch page {
+                case 0:
+                    VStack(spacing: 14) {
+                        anim(art.hamster32(skin, "idle"), size: 128).padding(16).background(Color.black).clipShape(RoundedRectangle(cornerRadius: 16))
+                        Text("안녕, 햄찌예요").font(.title2.bold())
+                        VStack(alignment: .leading, spacing: 6) {
+                            how("menubar.rectangle", "메뉴바(또는 노치 아래)에 살아요", "일하는 동안 늘 보이는 자리에서 작게 움직여요. 자리는 ⌘+드래그로 옮길 수 있어요.")
+                            how("sparkles", "내 하루에 반응해요", "Claude Code 작업, 회의, 슬랙·카톡 알림, 점심·퇴근 시간, 날씨, 계절까지. 표정과 소품이 바뀌어요.")
+                            how("paintpalette", "44종 중에 골라요", "클래식 34종(색·패턴 모프)과 햄찌 10종. 액세서리와 계절 코스튬도 있어요.")
+                        }
+                    }.frame(maxWidth: .infinity)
+                case 1:
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("햄찌가 하는 것").font(.title2.bold())
+                        Text("상태마다 햄스터 표정과 옆 소품이 달라져요. 마우스를 올리면 지금 왜 그런지 툴팁으로 알려줘요.").font(.caption).foregroundStyle(.secondary)
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 10) {
+                            cell("working", "쳇바퀴", "Claude가 일하는 중"); cell("done", "체크", "답변 끝"); cell("surprised", "사이렌", "승인 기다리는 중"); cell("notify", "봉투", "슬랙·카톡 알림")
+                            cell("meeting", "헤드폰", "회의 중"); cell("lunch", "도시락", "점심시간"); cell("break", "커피", "오래 일했어요"); cell("pet", "하트", "쓰다듬기")
+                        }
+                    }
+                case 2:
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("조작법").font(.title2.bold())
+                        how("cursorarrow.click", "좌클릭", "쓰다듬기 + 팝오버. 팝오버엔 달력과 7일 일정, 볼주머니(최근 복사한 글 5개), 활동 잔디, 집중 세션 시작 버튼이 있어요.")
+                        how("cursorarrow.click.2", "우클릭", "지금 상태 설명, 다음 회의, 스킨·레이아웃·상태 테스트, 설정(⌘,).")
+                        how("rectangle.split.3x1", "레이아웃", "메뉴바 22px 단독 · 44px 햄스터+소품 · 66px +장면 · 노치 모드(노치 아래 32px). 노치 맥북이면 노치 모드를 권해요.")
+                        how("slider.horizontal.3", "설정", "모습(스킨·액세서리·타자 반응) · 하루 리듬(점심·퇴근·잘 시간·생일) · 건강(쉬기·물·집중) · 알림(감시 앱) · 시스템(권한·Claude 훅·업데이트).")
+                        how("keyboard", "봉고 햄스터", "설정에서 켜면 키를 칠 때 귀가 쫑긋하고 빠르게 치면 같이 쳐요. 어떤 키인지는 읽지 않아요. 기본은 꺼짐.")
+                    }
+                default:
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("권한 설정").font(.title2.bold())
+                        Text("필요한 것만, 원하는 순서로 켜면 돼요. 안 켜도 햄스터는 돌아가요. 나중에 설정 → 시스템에서도 할 수 있어요.").font(.caption).foregroundStyle(.secondary)
+                        row(1, "캘린더", "회의 5분 전 알람시계, 회의 중 헤드폰, 좌클릭 일정 보기. 아웃룩 일정은 시스템 설정 → 인터넷 계정 → Exchange 추가(캘린더만 켜기)로 맥 캘린더에 들어와요.", ok: st.calendar, action: "설정 열기") { pane("Privacy_Calendars") }
+                        row(2, "손쉬운 사용", "Dock 배지로 슬랙·카톡·아웃룩 알림을 알아채요. 타자 반응(봉고)도 이 권한을 써요. 키 내용은 읽지 않아요.", ok: st.accessibility, action: "설정 열기") { pane("Privacy_Accessibility") }
+                        row(3, "위치", "현재 위치 날씨로 비·눈·더위 코스튬. 30분마다 한 번, 약 1km 로 뭉갠 좌표만 보내요.", ok: st.location, action: "설정 열기") { pane("Privacy_LocationServices") }
+                        row(4, "Claude Code 훅", ClaudeHooks.claudeInstalled ? "Claude가 일하면 쳇바퀴, 끝나면 체크, 승인 대기면 사이렌. ~/.claude/settings.json에 훅 7개를 넣어요(백업 후)." : "이 맥엔 Claude Code가 없어요. 나중에 설치하면 설정 → 시스템에서 연결할 수 있어요.",
+                            ok: ClaudeHooks.claudeInstalled ? hooks == ClaudeHooks.events.count : nil, action: ClaudeHooks.claudeInstalled ? "연결" : nil) { try? ClaudeHooks.connect(); hooks = ClaudeHooks.connectedCount }
+                    }
+                }
+            }.frame(maxWidth: .infinity, minHeight: 330, alignment: .top)
             Divider()
             HStack {
-                Text("노치 맥북에서 햄스터가 안 보이면 ⌘를 누른 채 시계 쪽으로 끌어 주세요. 레이아웃은 우클릭 → 레이아웃.").font(.caption2).foregroundStyle(.secondary)
+                HStack(spacing: 5) { ForEach(0..<4, id: \.self) { i in Circle().fill(i == page ? Color.accentColor : Color.secondary.opacity(0.3)).frame(width: 6, height: 6) } }
                 Spacer()
-                Button("설정 열기") { openSettings() }
-                Button("시작하기") { close() }.buttonStyle(.borderedProminent)
+                if page > 0 { Button("이전") { page -= 1 } }
+                if page < 3 { Button("다음") { page += 1 }.buttonStyle(.borderedProminent) }
+                else { Button("설정 열기") { openSettings() }; Button("시작하기") { close() }.buttonStyle(.borderedProminent) }
             }
-        }.padding(18).frame(width: 520).onAppear { st = status() }
+        }.padding(18).frame(width: 560).onAppear { st = status() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in st = status(); hooks = ClaudeHooks.connectedCount }
     }
 }
@@ -927,7 +985,7 @@ struct OnboardingView: View {
 // MARK: - 본체
 final class Pet: NSObject {
     let art = Art(), item = NSStatusBar.system.statusItem(withLength: 22), cal = CalendarWatch(), weather = Weather()
-    var skin: String { get { defaults.string(forKey: "skin") ?? "A" } set { defaults.set(newValue, forKey: "skin") } }
+    var skin: String { get { defaults.string(forKey: "skin") ?? "SC" } set { defaults.set(newValue, forKey: "skin") } }  // 기본: 리본 햄찌
     var layout: String { get { defaults.string(forKey: "layout") ?? "A" } set { defaults.set(newValue, forKey: "layout") } }
     var watched: [(names: [String], logo: String, label: String)] {
         WATCH_APPS.filter { defaults.object(forKey: $0.key) == nil ? ["watchSlack", "watchKakao"].contains($0.key) : defaults.bool(forKey: $0.key) }.map { ($0.names, $0.logo, $0.label) }
@@ -1000,11 +1058,12 @@ final class Pet: NSObject {
     // 세션별 파일(~/.hamster.d/<session>)과 구형 단일 파일(~/.hamster)을 합산한다.
     func readHookFile() {
         var files = [stateFile]
-        if let names = try? FileManager.default.contentsOfDirectory(atPath: stateDir) { files += names.map { stateDir + "/" + $0 } }
+        if let names = try? FileManager.default.contentsOfDirectory(atPath: stateDir) { files += names.filter { !$0.hasPrefix(".") && $0 != "cmd" && $0 != "activity.json" }.map { stateDir + "/" + $0 } }
         var states: [String: String] = [:]
         for f in files {
             guard let attrs = try? FileManager.default.attributesOfItem(atPath: f), let m = attrs[.modificationDate] as? Date, Date().timeIntervalSince(m) < 2 * 3600,
                   let s = try? String(contentsOfFile: f, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines) else { continue }
+            if s == "surprised", Date().timeIntervalSince(m) > 30 * 60 { continue }  // 세션이 죽어 남은 승인 대기는 30분 뒤 무시
             states[f] = s
             if s != lastSeen[f] {  // 바뀐 순간에만 이벤트
                 if lastSeen[f] != nil, s == "done" || s == "faint" { fire(s); if s == "done" { log.bump() } }
@@ -1038,7 +1097,7 @@ final class Pet: NSObject {
         inMeeting = self.cal.inMeeting(now)
         if let e = self.cal.startingSoon(now), !firedMeetings.contains(e.eventIdentifier) { firedMeetings.insert(e.eventIdentifier); fire("meeting_soon") }
         // Dock 배지: 배터리면 15초, 전원이면 5초
-        if now.timeIntervalSince(lastBadgePoll) >= ((bat?.onBattery ?? false) ? 15 : 5) {
+        if !watched.isEmpty, AXIsProcessTrusted(), now.timeIntervalSince(lastBadgePoll) >= ((bat?.onBattery ?? false) ? 15 : 5) {  // 감시 앱·권한 없으면 osascript 안 띄움
             lastBadgePoll = now
             DispatchQueue.global().async { [self] in
                 let b = Sensors.dockBadges()
@@ -1268,11 +1327,12 @@ final class Pet: NSObject {
         }
     }
     @objc func installUpdate() { updater.install() }
-    @objc func showOnboarding() {
-        let view = OnboardingView(status: { [weak self] in PermissionStatus(calendar: self?.cal.granted ?? false, location: self?.weather.coord != nil, accessibility: AXIsProcessTrusted()) },
+    @objc func showOnboarding() { showOnboardingPage(0) }
+    func showOnboardingPage(_ page: Int) {
+        let view = OnboardingView(art: art, skin: skin, page: page, status: { [weak self] in PermissionStatus(calendar: self?.cal.granted ?? false, location: self?.weather.coord != nil, accessibility: AXIsProcessTrusted()) },
                                   openSettings: { [weak self] in self?.openSettings() },
                                   close: { [weak self] in defaults.set(true, forKey: "onboarded"); self?.onboardingWindow?.close() })
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 420), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 460), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         w.title = "Happy Hamzzi 시작하기"; w.contentViewController = NSHostingController(rootView: view); w.isReleasedWhenClosed = false; w.center()
         onboardingWindow = w; NSApp.activate(ignoringOtherApps: true); w.makeKeyAndOrderFront(nil)
         defaults.set(true, forKey: "onboarded")
@@ -1321,7 +1381,7 @@ final class Pet: NSObject {
         switch verb {
         case "popover": testTab = arg.isEmpty ? nil : arg; if popover.isShown { popover.performClose(nil) }; handleClick(agendaOnly: true)
         case "settings": openSettings()
-        case "onboarding": showOnboarding()
+        case "onboarding": showOnboardingPage(Int(arg) ?? 0)
         case "close": popover.performClose(nil)
         case "checkupdate": updater.check(manual: true)
         case "installupdate": updater.install()
