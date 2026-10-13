@@ -27,6 +27,23 @@ def img(rows, outline=None):
     return im
 
 def shift(im, dx=0, dy=0): return im.transform(im.size, Image.AFFINE, (1, 0, -dx, 0, 1, -dy))
+def normalize(frames, target):
+    """소품·장면·로고를 한 크기로: 모든 프레임 합집합 bbox를 target 상자에 맞춰 (nearest) 스케일 후 캔버스 중앙에 둔다.
+    프레임을 함께 다루므로 애니메이션의 상대 움직임이 유지된다. 빈 프레임은 그대로. (im, t) 목록 또는 이미지 하나."""
+    single = isinstance(frames, Image.Image)
+    ims = [frames] if single else [im for im, _ in frames]
+    boxes = [im.getbbox() for im in ims if im.getbbox()]
+    if not boxes: return frames
+    l, t = min(b[0] for b in boxes), min(b[1] for b in boxes); r, b = max(b[2] for b in boxes), max(b[3] for b in boxes)
+    sc = min(target / (r - l), target / (b - t))
+    if 0.9 <= sc <= 1.1: sc = 1
+    n = ims[0].size[0]
+    def one(im):
+        if sc != 1: im = im.resize((round(n * sc), round(n * sc)), Image.NEAREST)
+        out = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+        out.paste(im, (round((n - (r + l) * sc) / 2), round((n - (b + t) * sc) / 2)))
+        return out
+    return one(frames) if single else [(one(im), tk) for im, tk in frames]
 def place(base, rows, x0, y0):  # 작은 조각을 좌표에 얹는다
     base = grid(base)
     for j, r in enumerate(rows):
