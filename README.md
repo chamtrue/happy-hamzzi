@@ -79,7 +79,7 @@
 - **Claude 반응이 없어요** → 설정 → 시스템 → Claude Code가 "훅 연결됨"인지. 연결 후 새로 연 세션부터 반영돼요.
 
 ---
-© 2026 moon.gipeum. 사내 배포용. 그림·코드의 재배포는 제작자에게 문의해 주세요.
+© 2026 moon.gipeum · 코드 MIT(`LICENSE`) · 그림 CC BY-NC 4.0(`LICENSE-ART.md`)
 
 ## 개발자용
 

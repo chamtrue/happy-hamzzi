@@ -31,7 +31,7 @@ open "/Applications/Happy Hamzzi.app"
 echo "설치 완료. 앱이 로그인 항목에 스스로 등록돼요(설정에서 끌 수 있음). 메뉴바 햄스터 우클릭 → 설정…"
 echo "권한: 캘린더(회의), 자동화·손쉬운 사용(슬랙·카톡 배지)은 처음 뜨는 팝업에서 허용. 노치 맥북은 ⌘+드래그로 시계 쪽에 옮기세요."
 IN
-cp uninstall.sh LICENSE dist/pkg/
+cp uninstall.sh LICENSE LICENSE-ART.md dist/pkg/
 cat > dist/pkg/README.md <<'RM'
 # Happy Hamzzi — 메뉴바에 사는 픽셀 햄스터
 
@@ -112,11 +112,11 @@ cat > dist/pkg/README.md <<'RM'
 - **Claude 반응이 없어요** → 설정 → 시스템 → Claude Code가 "훅 연결됨"인지. 연결 후 새로 연 세션부터 반영돼요.
 
 ---
-© 2026 moon.gipeum. 사내 배포용. 그림·코드의 재배포는 제작자에게 문의해 주세요.
+© 2026 moon.gipeum · 코드 MIT(LICENSE) · 그림 CC BY-NC 4.0(LICENSE-ART.md)
 RM
 chmod +x dist/pkg/*.sh; rm -f "dist/HappyHamzzi-$V.zip"; (cd dist/pkg && zip -qr "../HappyHamzzi-$V.zip" .)
 # DMG: 앱 + Applications 바로가기 (끌어다 놓기 설치)
 rm -rf dist/dmg "dist/HappyHamzzi-$V.dmg"; mkdir -p dist/dmg; cp -R "Happy Hamzzi.app" dist/dmg/; ln -s /Applications dist/dmg/Applications
-cp dist/pkg/README.md dist/dmg/; cp dist/pkg/install.sh dist/pkg/uninstall.sh dist/dmg/; cp LICENSE dist/dmg/
+cp dist/pkg/README.md dist/dmg/; cp dist/pkg/install.sh dist/pkg/uninstall.sh dist/dmg/; cp LICENSE LICENSE-ART.md dist/dmg/
 hdiutil create -quiet -volname "Happy Hamzzi" -srcfolder dist/dmg -ov -format UDZO "dist/HappyHamzzi-$V.dmg"; rm -rf dist/dmg
 ls -la "dist/HappyHamzzi-$V.zip" "dist/HappyHamzzi-$V.dmg"
