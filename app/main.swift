@@ -1078,16 +1078,18 @@ final class Pet: NSObject {
         }
         event = (kind, app, Date())
     }
-    // 세션별 파일(~/.hamster.d/<session>)과 구형 단일 파일(~/.hamster)을 합산한다.
+    // 세션별 파일(~/.hamster.d/<session>)을 합산한다. (구형 단일 파일 ~/.hamster 는 더 이상 읽지 않는다 — 시간 제한이 없어 쳇바퀴가 안 멈추는 버그의 원인이었다)
     func readHookFile() {
-        var files = [stateFile]
+        var files: [String] = []
         if let names = try? FileManager.default.contentsOfDirectory(atPath: stateDir) { files += names.filter { !$0.hasPrefix(".") && $0 != "cmd" && $0 != "activity.json" }.map { stateDir + "/" + $0 } }
         var states: [String: String] = [:]
         for f in files {
             guard let attrs = try? FileManager.default.attributesOfItem(atPath: f), let m = attrs[.modificationDate] as? Date else { continue }
-            if f != stateFile, Date().timeIntervalSince(m) > 2 * 3600 { try? FileManager.default.removeItem(atPath: f); continue }  // 죽은 세션 파일 정리
+            let age = Date().timeIntervalSince(m)
+            if age > 2 * 3600 { try? FileManager.default.removeItem(atPath: f); continue }  // 죽은 세션 파일 정리
             guard let s = try? String(contentsOfFile: f, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines) else { continue }
-            if s == "surprised", Date().timeIntervalSince(m) > 30 * 60 { continue }  // 세션이 죽어 남은 승인 대기는 30분 뒤 무시
+            if s == "surprised", age > 30 * 60 { continue }   // 세션이 죽어 남은 승인 대기는 30분 뒤 무시
+            if s == "working", age > 20 * 60 { continue }     // 도구 호출마다 갱신되므로 20분 넘게 조용하면 죽은 세션으로 본다
             states[f] = s
             if s != lastSeen[f] {  // 바뀐 순간에만 이벤트
                 if lastSeen[f] != nil, s == "done" || s == "faint" { fire(s); if s == "done" { log.bump() } }
