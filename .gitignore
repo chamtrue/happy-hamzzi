@@ -1,0 +1,12 @@
+# 빌드 산출물 (art.py / art32.py / build.sh 가 다시 만든다)
+Happy Hamzzi.app/
+frames/
+dist/
+__pycache__/
+*.pyc
+.DS_Store
+app/main.swift.bak
+app/AppIcon.iconset/
+samples.html
+idle4.html
+notch32.html

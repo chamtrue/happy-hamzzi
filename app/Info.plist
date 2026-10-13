@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.gipeum.happyhamzzi</string>
+<key>CFBundleName</key><string>Happy Hamzzi</string>
+<key>CFBundleDisplayName</key><string>Happy Hamzzi</string>
+<key>CFBundleExecutable</key><string>hamster</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>2.5</string>
+<key>CFBundleVersion</key><string>7</string>
+<key>CFBundleIconFile</key><string>AppIcon</string>
+<key>NSLocationUsageDescription</key><string>현재 위치의 날씨(비·눈·더위)를 표정에 반영합니다.</string>
+<key>NSLocationWhenInUseUsageDescription</key><string>현재 위치의 날씨(비·눈·더위)를 표정에 반영합니다.</string>
+<key>NSHumanReadableCopyright</key><string>© 2026 moon.gipeum</string>
+<key>LSUIElement</key><true/>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
+<key>NSCalendarsFullAccessUsageDescription</key><string>회의 5분 전·회의 중 표정을 위해 일정을 읽습니다.</string>
+<key>NSAppleEventsUsageDescription</key><string>Dock 배지(슬랙·카톡 알림 수)를 읽기 위해 System Events를 사용합니다.</string>
+</dict></plist>
