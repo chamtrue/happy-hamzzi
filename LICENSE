@@ -20,8 +20,3 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
----
-This MIT license covers the source code only. The pixel art (hamster designs,
-props, costumes, app icon — including the pixel data embedded in art.py,
-art32.py, props.py, props32.py and the generated frames) is licensed
-separately under CC BY-NC 4.0. See LICENSE-ART.md.

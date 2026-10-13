@@ -7,7 +7,7 @@
 ## 설치 (둘 중 하나)
 
 **A. DMG** — `HappyHamzzi.dmg`를 열고 앱을 Applications로 끌어다 놓은 뒤 더블클릭.
-처음 열 때 "확인되지 않은 개발자" 경고가 뜨면 **앱을 우클릭 → 열기**로 한 번만 통과하면 돼요(사내 자체 서명이라 그래요).
+처음 열 때 "확인되지 않은 개발자" 경고가 뜨면 **앱을 우클릭 → 열기**로 한 번만 통과하면 돼요(Apple 공증 없이 자체 서명한 앱이라 그래요).
 
 **B. zip** — 압축을 풀고 터미널에서 `bash install.sh`. Applications 복사, 경고 해제, Claude Code 훅까지 한 번에.
 
@@ -80,6 +80,11 @@
 
 ---
 © 2026 moon.gipeum · 코드 MIT(`LICENSE`) · 그림 CC BY-NC 4.0(`LICENSE-ART.md`)
+
+## 라이선스
+
+- 코드: MIT (`LICENSE`)
+- 픽셀 아트(햄스터·소품·코스튬·아이콘, 생성기 안의 픽셀 데이터 포함): CC BY-NC 4.0 (`LICENSE-ART.md`) — 출처 표기, 비상업
 
 ## 개발자용
 
