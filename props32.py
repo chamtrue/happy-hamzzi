@@ -618,3 +618,5 @@ OUTLOOK = ["", "", ".....KKKKKKKKKKKKKKKKKKKKKK.....", "....KUUUUUUUUUUUUUUUUUUU
            "...KUUUhhhhhhhhhhhhhhhhhhUUUK...", "...KUUUUUUUUUUUUUUUUUUUUUUUUK...", "...KUUUUUUUUUUUUUUUUUUUUUUUUK...", "....KUUUUUUUUUUUUUUUUUUUUUUK....",
            ".....KKKKKKKKKKKKKKKKKKKKKK....."]
 LOGOS32 = {"slack": img(SLACK), "kakao": img(KAKAO), "outlook": img(OUTLOOK), "generic": img(BUBBLE)}
+
+PROPS32["update"] = PROPS32["xmas"]; SCENES32["update"] = SCENES32["done"]

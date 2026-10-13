@@ -479,6 +479,7 @@ def frames(sk, inline=True):
         "meeting_soon": [(front(sk, eyes="wide", mouth="open", shift=(-1, 0)), 1), (front(sk, eyes="wide", mouth="open", shift=(1, 0)), 1), (front(sk, eyes="wide", mouth="open"), 2)],
         "meeting": [(front(sk, layers=HEADPHONES), 20), (front(sk, eyes="closed", layers=HEADPHONES), 2)],
         "pet": [(front(sk, eyes="happy", mouth="smile", layers=HEARTS), 3), (front(sk, eyes="happy", mouth="smile", layers=HEARTS, shift=(0, -1)), 3)],
+        "update": [(front(sk, eyes="happy", mouth="smile"), 4), (front(sk, eyes="happy", mouth="smile", shift=(0, -1)), 4)],
     }
     if sk.get("sb"):  # 시안 그대로: 손·씨·볼주머니·세수 없이 살짝 끄덕이는 대기
         calm = [(base, 30), (front(sk, shift=(0, 1)), 6)]
@@ -488,7 +489,7 @@ def frames(sk, inline=True):
 STATE_NAMES = {"idle": "대기 (씨 먹기)", "working": "작업 중 (쳇바퀴)", "done": "완료", "surprised": "권한 요청", "faint": "에러 (기절)", "sleep": "잠", "notify": "알림 도착",
     "lunch": "점심 12시", "leave": "퇴근 19시", "night": "밤 23시", "friday": "금요일 오후", "break": "50분 일함, 쉬어", "battery_low": "배터리 20%", "charging": "충전 중",
     "cpu": "CPU 과부하", "meeting_soon": "회의 5분 전", "meeting": "회의 중", "pet": "쓰다듬기",
-    "rain": "비 오는 날", "snow": "눈 오는 날", "hot": "30도 이상", "birthday": "생일", "water": "물 마실 시간", "grumpy": "자는데 깨움 (짜증)", "sprint": "쳇바퀴 전력질주 (클릭)", "pet_meeting": "회의 중 쓰다듬기", "dizzy": "기절에서 부활 (클릭)", "wake": "기상 (기지개)", "focus": "집중 세션", "idle_groom": "대기: 세수", "idle_cheeks": "대기: 볼 채우기", "idle_roll": "대기: 구르기", "idle_peek": "대기: 빼꼼", "stash": "볼주머니에 넣기 (복사)", "typing": "같이 타자 치기 (봉고)"}
+    "rain": "비 오는 날", "snow": "눈 오는 날", "hot": "30도 이상", "birthday": "생일", "water": "물 마실 시간", "grumpy": "자는데 깨움 (짜증)", "sprint": "쳇바퀴 전력질주 (클릭)", "pet_meeting": "회의 중 쓰다듬기", "dizzy": "기절에서 부활 (클릭)", "wake": "기상 (기지개)", "focus": "집중 세션", "idle_groom": "대기: 세수", "idle_cheeks": "대기: 볼 채우기", "idle_roll": "대기: 구르기", "idle_peek": "대기: 빼꼼", "stash": "볼주머니에 넣기 (복사)", "typing": "같이 타자 치기 (봉고)", "update": "새 버전 알림 (선물)"}
 
 
 CORE = ["idle", "working", "done", "surprised", "faint", "sleep", "notify"]

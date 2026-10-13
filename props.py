@@ -874,3 +874,5 @@ PROPS["stash"] = [(img(CLIPBOARD), 4), (shift(img(CLIPBOARD), dy=-1), 2)]
 SCENES["stash"] = SCENES["idle"]
 
 PROPS["typing"] = PROPS["idle"]; SCENES["typing"] = SCENES["idle"]
+
+PROPS["update"] = PROPS["xmas"]; SCENES["update"] = SCENES["done"]

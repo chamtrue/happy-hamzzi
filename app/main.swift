@@ -9,9 +9,9 @@ import ServiceManagement
 let N = 22
 let CORE: Set<String> = ["idle", "working", "sprint", "focus", "done", "surprised", "faint", "sleep", "notify"]  // 22px 안에 들어가는 상태
 let EVENT_PRIORITY: [String: Int] = ["faint": 8, "surprised": 7, "battery_low": 6, "meeting_soon": 5, "notify": 4, "cpu": 3, "charging": 3, "done": 2, "wake": 2,
-                                     "pet": 1, "grumpy": 1, "sprint": 1, "pet_meeting": 1, "dizzy": 1, "stash": 1]
+                                     "pet": 1, "grumpy": 1, "sprint": 1, "pet_meeting": 1, "dizzy": 1, "stash": 1, "update": 2]
 let EVENT_SECONDS: [String: Double] = ["faint": 6, "surprised": 4, "battery_low": 8, "meeting_soon": 8, "notify": 5, "cpu": 6, "charging": 6, "done": 5, "wake": 4,
-                                       "pet": 4, "grumpy": 3, "sprint": 4, "pet_meeting": 4, "dizzy": 3, "stash": 2]
+                                       "pet": 4, "grumpy": 3, "sprint": 4, "pet_meeting": 4, "dizzy": 3, "stash": 2, "update": 6]
 let AMBIENT_ORDER = ["birthday", "break", "water", "lunch", "leave", "night", "friday", "hot", "rain", "snow"]
 // 감시 앱: 설정 키 → (Dock 이름 후보, 로고, 표시 이름)
 let WATCH_APPS: [(key: String, names: [String], logo: String, label: String)] = [
@@ -23,7 +23,7 @@ let REASONS: [String: String] = [
     "meeting_soon": "회의가 5분 안에 시작해요 (알람시계)", "meeting": "회의 중이에요 (헤드폰)", "pet": "쓰다듬어 줘서 좋아해요 (하트)",
     "battery_low": "배터리 20% 이하! (빨간 배터리)", "charging": "충전 시작 (초록 배터리)", "cpu": "CPU 과부하! (불)",
     "lunch": "점심시간 (도시락)", "leave": "퇴근 시간 (가방)", "night": "늦었어요, 잘 시간 (잠옷 모자)", "friday": "금요일 오후! (파티 모자)",
-    "break": "오래 일했어요, 좀 쉬어요 (커피)", "grumpy": "자는데 깨웠어요… (짜증)", "typing": "같이 타자 치는 중 (봉고 햄스터)", "stash": "복사한 걸 볼주머니에 넣었어요", "focus": "집중 세션 중 (쳇바퀴)", "sprint": "응원받아서 전력질주! (쳇바퀴)",
+    "break": "오래 일했어요, 좀 쉬어요 (커피)", "grumpy": "자는데 깨웠어요… (짜증)", "update": "새 버전이 있어요! 설정 → 시스템에서 설치 (선물 상자)", "typing": "같이 타자 치는 중 (봉고 햄스터)", "stash": "복사한 걸 볼주머니에 넣었어요", "focus": "집중 세션 중 (쳇바퀴)", "sprint": "응원받아서 전력질주! (쳇바퀴)",
     "pet_meeting": "회의 중이라 조용히 좋아해요 (하트)", "dizzy": "부활! 아직 어지러워요", "wake": "일어났어요, 기지개 (팔 번쩍)", "water": "물 한 잔 마셔요. 클릭하면 마신 걸로 기록 (물병)", "rain": "비 와요 (우산)", "snow": "눈 와요 (눈사람)", "hot": "30도 넘어요 (선풍기)", "birthday": "생일 축하해요! (케이크)"]
 func setting(_ key: String, _ def: Int) -> Int { defaults.object(forKey: key) == nil ? def : defaults.integer(forKey: key) }
 let IDLE_VARIANTS: [(String, Int)] = [("idle", 4), ("idle_groom", 1), ("idle_cheeks", 1), ("idle_roll", 1), ("idle_peek", 1)]  // 씨 먹기 50%, 나머지 12.5%씩
@@ -350,6 +350,77 @@ final class Activity {
     func count(_ d: Date) -> Int { counts[Self.df.string(from: d)] ?? 0 }
 }
 
+// MARK: - 업데이트 (GitHub Releases)
+final class Updater: ObservableObject {
+    static let repo = "chamtrue/happy-hamzzi"
+    enum State: Equatable { case idle, checking, upToDate, available(String, URL, String), downloading(Double), installing, error(String) }
+    @Published var state: State = .idle
+    @Published var lastChecked: Date? = defaults.object(forKey: "updateLastChecked") as? Date
+    var current: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0" }
+    var available: (String, URL)? { if case .available(let v, let u, _) = state { return (v, u) }; return nil }
+    static func newer(_ a: String, than b: String) -> Bool {
+        let pa = a.trimmingCharacters(in: CharacterSet(charactersIn: "v")).split(separator: ".").map { Int($0) ?? 0 }, pb = b.split(separator: ".").map { Int($0) ?? 0 }
+        for i in 0..<max(pa.count, pb.count) { let x = i < pa.count ? pa[i] : 0, y = i < pb.count ? pb[i] : 0; if x != y { return x > y } }
+        return false
+    }
+    func check(manual: Bool = false, completion: ((Bool) -> Void)? = nil) {
+        if case .downloading = state { return }
+        state = .checking
+        var req = URLRequest(url: URL(string: "https://api.github.com/repos/\(Self.repo)/releases/latest")!, timeoutInterval: 15)
+        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        URLSession.shared.dataTask(with: req) { data, resp, err in
+            DispatchQueue.main.async {
+                self.lastChecked = Date(); defaults.set(Date(), forKey: "updateLastChecked")
+                guard let data, let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let tag = j["tag_name"] as? String else {
+                    self.state = .error(err?.localizedDescription ?? "릴리스 정보를 못 읽었어요 (\((resp as? HTTPURLResponse)?.statusCode ?? 0))"); completion?(false); return
+                }
+                let assets = j["assets"] as? [[String: Any]] ?? []
+                let zip = assets.first { ($0["name"] as? String)?.hasSuffix(".zip") == true }.flatMap { ($0["browser_download_url"] as? String).flatMap(URL.init) }
+                if Self.newer(tag, than: self.current), let zip { self.state = .available(tag, zip, j["body"] as? String ?? ""); completion?(true) }
+                else { self.state = .upToDate; completion?(false) }
+            }
+        }.resume()
+    }
+    /// zip 을 받아 풀고 서명·번들 ID 를 확인한 뒤, 앱을 끄고 교체·재실행하는 스크립트를 띄운다
+    func install() {
+        guard let (version, url) = available else { return }
+        state = .downloading(0)
+        let task = URLSession.shared.downloadTask(with: url) { tmp, _, err in
+            DispatchQueue.main.async {
+                guard let tmp else { self.state = .error(err?.localizedDescription ?? "다운로드 실패"); return }
+                self.state = .installing
+                do {
+                    let work = FileManager.default.temporaryDirectory.appendingPathComponent("hamzzi-update-\(version)")
+                    try? FileManager.default.removeItem(at: work); try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+                    let zip = work.appendingPathComponent("update.zip"); try FileManager.default.moveItem(at: tmp, to: zip)
+                    let unzip = Process(); unzip.executableURL = URL(fileURLWithPath: "/usr/bin/ditto"); unzip.arguments = ["-x", "-k", zip.path, work.path]; try unzip.run(); unzip.waitUntilExit()
+                    let newApp = work.appendingPathComponent("Happy Hamzzi.app")
+                    guard FileManager.default.fileExists(atPath: newApp.path) else { throw NSError(domain: "hamzzi", code: 1, userInfo: [NSLocalizedDescriptionKey: "zip 안에 앱이 없어요"]) }
+                    // 서명 검증: 번들 ID 가 같은지
+                    let cs = Process(); cs.executableURL = URL(fileURLWithPath: "/usr/bin/codesign"); cs.arguments = ["-dv", newApp.path]
+                    let pipe = Pipe(); cs.standardError = pipe; cs.standardOutput = FileHandle.nullDevice; try cs.run(); cs.waitUntilExit()
+                    let info = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                    guard info.contains("Identifier=\(Bundle.main.bundleIdentifier ?? "com.gipeum.happyhamzzi")") else { throw NSError(domain: "hamzzi", code: 2, userInfo: [NSLocalizedDescriptionKey: "서명 확인 실패: 번들 ID 가 달라요"]) }
+                    let target = Bundle.main.bundleURL
+                    let script = """
+                    while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.3; done
+                    rm -rf "\(target.path)"; mv "\(newApp.path)" "\(target.path)"; xattr -dr com.apple.quarantine "\(target.path)" 2>/dev/null
+                    open "\(target.path)"; rm -rf "\(work.path)"
+                    """
+                    let sh = Process(); sh.executableURL = URL(fileURLWithPath: "/bin/sh"); sh.arguments = ["-c", script]; try sh.run()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { NSApp.terminate(nil) }
+                } catch { self.state = .error(error.localizedDescription) }
+            }
+        }
+        task.resume()
+        // 진행률
+        Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] t in
+            guard let self, case .downloading = self.state else { t.invalidate(); return }
+            let p = task.progress.fractionCompleted; self.state = .downloading(p)
+        }
+    }
+}
+
 // MARK: - 볼주머니 (클립보드 최근 5개, 메모리에만 둔다)
 final class Pouch {
     struct Item { let text: String; let at: Date }
@@ -536,10 +607,10 @@ struct AgendaView: View {
 // MARK: - 설정 창 (탭: 모습 · 하루 리듬 · 건강 · 알림 · 시스템)
 struct PermissionStatus { let calendar: Bool; let location: Bool; let accessibility: Bool }
 struct SettingsView: View {
-    let art: Art; let preview: (String, String) -> NSImage; let status: () -> PermissionStatus
+    let art: Art; let preview: (String, String) -> NSImage; let status: () -> PermissionStatus; let updater: Updater
     @State var tab: String
-    init(initialTab: String? = nil, art: Art, preview: @escaping (String, String) -> NSImage, status: @escaping () -> PermissionStatus) {
-        self.art = art; self.preview = preview; self.status = status
+    init(initialTab: String? = nil, updater: Updater, art: Art, preview: @escaping (String, String) -> NSImage, status: @escaping () -> PermissionStatus) {
+        self.art = art; self.preview = preview; self.status = status; self.updater = updater
         _tab = State(initialValue: initialTab ?? ProcessInfo.processInfo.environment["HAMSTER_TEST_SETTINGS"].flatMap { $0.count > 1 ? $0 : nil } ?? "모습")
     }
     var body: some View {
@@ -548,7 +619,7 @@ struct SettingsView: View {
             RhythmTab().tabItem { Label("하루 리듬", systemImage: "sun.horizon") }.tag("하루 리듬")
             HealthTab().tabItem { Label("건강", systemImage: "heart") }.tag("건강")
             NotifyTab(art: art).tabItem { Label("알림", systemImage: "bell") }.tag("알림")
-            SystemTab(status: status).tabItem { Label("시스템", systemImage: "gearshape") }.tag("시스템")
+            SystemTab(status: status, updater: updater).tabItem { Label("시스템", systemImage: "gearshape") }.tag("시스템")
         }.padding(.top, 6).frame(width: 520, height: 520)
     }
 }
@@ -678,12 +749,15 @@ struct NotifyTab: View {
 }
 struct SystemTab: View {
     let status: () -> PermissionStatus
+    @ObservedObject var updater: Updater
+    @AppStorage("autoUpdateCheck") var autoCheck = true
     @State var login = SMAppService.mainApp.status == .enabled
     @AppStorage("clipboardEnabled") var clipboard = true
     @State var hookCount = ClaudeHooks.connectedCount
     @State var hookError: String? = nil
     @State var st = PermissionStatus(calendar: false, location: false, accessibility: false)
     func open(_ pane: String) { if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") { NSWorkspace.shared.open(u) } }
+    func fmtDate(_ d: Date) -> String { let f = DateFormatter(); f.locale = Locale(identifier: "ko_KR"); f.dateFormat = "M/d a h:mm"; return f.string(from: d) }
     func perm(_ name: String, _ what: String, _ ok: Bool, _ pane: String) -> some View {
         HStack {
             Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.circle").foregroundStyle(ok ? .green : .orange)
@@ -725,6 +799,28 @@ struct SystemTab: View {
             Section {
                 Toggle("볼주머니: 최근 복사한 글 5개 기억", isOn: $clipboard)
             } header: { Text("클립보드") } footer: { Text("메모리에만 두고 파일로 저장하지 않아요. 앱을 끄면 사라져요. 일정 팝오버의 볼주머니 탭에서 다시 복사할 수 있어요.") }
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("현재 \(updater.current)").font(.callout)
+                        Group {
+                            switch updater.state {
+                            case .idle: Text(updater.lastChecked.map { "마지막 확인 \(fmtDate($0))" } ?? "아직 확인 안 함")
+                            case .checking: Text("확인 중…")
+                            case .upToDate: Text("최신 버전이에요")
+                            case .available(let v, _, _): Text("새 버전 \(v) 있음").foregroundStyle(Color.accentColor)
+                            case .downloading(let p): Text("내려받는 중 \(Int(p * 100))%")
+                            case .installing: Text("설치 중… 앱이 잠시 꺼졌다 켜져요")
+                            case .error(let e): Text("실패: \(e)").foregroundStyle(.red)
+                            }
+                        }.font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if case .available = updater.state { Button("설치") { updater.install() }.buttonStyle(.borderedProminent) }
+                    Button("지금 확인") { updater.check(manual: true) }.disabled({ if case .checking = updater.state { return true }; if case .downloading = updater.state { return true }; return false }())
+                }
+                Toggle("하루 한 번 자동 확인", isOn: $autoCheck)
+            } header: { Text("업데이트") } footer: { Text("GitHub Releases(\(Updater.repo))에서 최신 버전을 확인해요. 설치는 zip을 받아 서명·번들 ID를 확인한 뒤 앱을 교체하고 다시 열어요. 새 버전이 있으면 햄스터가 선물 상자를 들고, 우클릭 메뉴에도 설치 항목이 떠요.") }
             Section("정보") {
                 LabeledContent("버전", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-")
                 LabeledContent("상태 파일", value: "~/.hamster.d (Claude Code 훅)")
@@ -852,7 +948,8 @@ final class Pet: NSObject {
     // 타자 반응: 키 내용은 안 읽고 눌림 시각만 쌓는다
     var keyTimes: [Date] = [], earFlickUntil = Date.distantPast, earLeft = false, typeLeft = false, typingUntil: Date? = nil
     var dressed2: [String: NSImage] = [:]
-    let pouch = Pouch(), log = Activity()
+    let pouch = Pouch(), log = Activity(), updater = Updater()
+    var notifiedUpdate = ""
     var focusRemaining: Int? { focusUntil.map { max(0, Int($0.timeIntervalSinceNow.rounded(.up))) } }
     var dressed: [String: NSImage] = [:]  // 프레임 id + 코스튬 → 합성 캐시
 
@@ -871,6 +968,8 @@ final class Pet: NSObject {
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.lastDrawn = [] }  // 손쉬운 사용 권한이 있어야 들어온다
         if SMAppService.mainApp.status == .notRegistered { try? SMAppService.mainApp.register() }  // 첫 실행에 로그인 항목 등록. 설정에서 끌 수 있다
         if !defaults.bool(forKey: "onboarded") { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.showOnboarding() } }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in self?.autoCheckUpdate() }
+        Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in self?.autoCheckUpdate() }
         if !AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary) {
             NSLog("손쉬운 사용 권한이 없어 Dock 배지를 못 읽는다")
         }
@@ -1116,6 +1215,7 @@ final class Pet: NSObject {
             let df = DateFormatter(); df.locale = Locale(identifier: "ko_KR"); df.dateFormat = "M/d a h:mm"
             menu.addItem(item("다음 회의: \(df.string(from: e.startDate)) \(e.title ?? "") (\(when))", "calendar", nil, enabled: false))
         }
+        if let (v, _) = updater.available { menu.addItem(item("업데이트 \(v) 설치…", "arrow.down.circle.fill", #selector(installUpdate))) }
         if ClaudeHooks.claudeInstalled, ClaudeHooks.connectedCount < ClaudeHooks.events.count {
             menu.addItem(item("Claude Code 훅이 연결되지 않았어요 → 설정에서 연결", "exclamationmark.triangle", #selector(openSystemSettings)))
         }
@@ -1150,6 +1250,15 @@ final class Pet: NSObject {
     }
     @objc func pickSkin(_ m: NSMenuItem) { if let k = m.representedObject as? String { skin = k } }
     @objc func pickLayout(_ m: NSMenuItem) { if let k = m.representedObject as? String { layout = k } }
+    func autoCheckUpdate() {
+        guard flag("autoUpdateCheck", true) else { return }
+        if let t = updater.lastChecked, Date().timeIntervalSince(t) < 86400 { return }  // 하루 한 번
+        updater.check { [weak self] found in
+            guard let self, found, let (v, _) = self.updater.available, self.notifiedUpdate != v else { return }
+            self.notifiedUpdate = v; self.fire("update")  // 선물 상자
+        }
+    }
+    @objc func installUpdate() { updater.install() }
     @objc func showOnboarding() {
         let view = OnboardingView(status: { [weak self] in PermissionStatus(calendar: self?.cal.granted ?? false, location: self?.weather.coord != nil, accessibility: AXIsProcessTrusted()) },
                                   openSettings: { [weak self] in self?.openSettings() },
@@ -1163,7 +1272,7 @@ final class Pet: NSObject {
     var settingsTab: String? = nil
     @objc func openSettings() {
         if settingsWindow == nil {
-            let view = SettingsView(initialTab: settingsTab, art: art, preview: { [weak self] skin, layout in self?.previewImage(skin: skin, layout: layout) ?? NSImage() },
+            let view = SettingsView(initialTab: settingsTab, updater: updater, art: art, preview: { [weak self] skin, layout in self?.previewImage(skin: skin, layout: layout) ?? NSImage() },
                                     status: { [weak self] in PermissionStatus(calendar: self?.cal.granted ?? false, location: self?.weather.coord != nil, accessibility: AXIsProcessTrusted()) })
             let hc = NSHostingController(rootView: view)
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 520), styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -1205,6 +1314,8 @@ final class Pet: NSObject {
         case "settings": openSettings()
         case "onboarding": showOnboarding()
         case "close": popover.performClose(nil)
+        case "checkupdate": updater.check(manual: true)
+        case "installupdate": updater.install()
         case "state": testState = arg; testUntil = Date().addingTimeInterval(8)
         case "season": testSeason = arg; testSeasonUntil = Date().addingTimeInterval(10)
         default: break

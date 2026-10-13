@@ -323,6 +323,7 @@ def frames(sk):
         "rain": [(base, 20), (blink, 2), (front(sk, mouth="open"), 6)],
         "snow": [(front(sk, eyes="closed", shift=(-1, 0)), 1), (front(sk, eyes="closed", shift=(1, 0)), 1), (front(sk, eyes="closed"), 1)],
         "hot": [(front(sk, eyes="closed", mouth="open", layers=L(art.SWEAT)), 8), (front(sk, eyes="closed", mouth="open", layers=L(art.SWEAT), shift=(0, 1)), 8)],
+        "update": [(front(sk, eyes="happy", mouth="smile"), 4), (front(sk, eyes="happy", mouth="smile", shift=(0, -1)), 4)],
     }
     if sk.get("sb"):  # 시안 그대로: 손·씨·볼주머니·세수 없이 살짝 끄덕이는 대기
         calm = [(base, 30), (front(sk, shift=(0, 1)), 6)]
