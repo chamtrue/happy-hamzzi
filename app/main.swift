@@ -635,9 +635,9 @@ struct AgendaView: View {
                         }
                     }
                 }
+            }.frame(maxHeight: 250)  // 일정 목록만 스크롤, 나머지는 내용 높이
             }
-            }
-        }.padding(14).frame(width: 340, height: 480, alignment: .top)  // 탭을 바꿔도 팝오버 크기가 안 바뀌므로 높이를 고정한다
+        }.padding(14).frame(width: 340, alignment: .top)  // 높이는 내용대로: 호스팅 컨트롤러가 preferredContentSize 로 팝오버를 늘였다 줄인다
     }
     @ViewBuilder func nowPlayingView(_ np: NowPlaying) -> some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
@@ -647,7 +647,7 @@ struct AgendaView: View {
                         Group { if let a = i.artwork { Image(nsImage: a).resizable().aspectRatio(contentMode: .fill) } else { Image(systemName: "music.note").font(.title).foregroundStyle(.secondary) } }
                             .frame(width: 72, height: 72).background(Color.primary.opacity(0.06)).clipShape(RoundedRectangle(cornerRadius: 8))
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(i.title).font(.headline).lineLimit(3)
+                            Text(i.title).font(.headline).lineLimit(3).fixedSize(horizontal: false, vertical: true)
                             if !i.artist.isEmpty { Text(i.artist).font(.subheadline).foregroundStyle(.secondary) }
                         }
                         Spacer(minLength: 0)
@@ -1379,9 +1379,10 @@ final class Pet: NSObject {
         if !agendaOnly, anchor == nil, NSApp.currentEvent?.type == .rightMouseUp { showMenu(); return }
         if popover.isShown { popover.performClose(nil) } else if let b = anchor ?? (layout == "N" && tray.panel.isVisible ? tray.view : item.button) {
             cal.refresh()
-            popover.contentViewController = NSHostingController(rootView: AgendaView(events: cal.all, granted: cal.granted,
+            let host = NSHostingController(rootView: AgendaView(events: cal.all, granted: cal.granted,
                 focusRemaining: { [weak self] in self?.focusRemaining }, focusMinutes: setting("focusMinutes", 25), toggleFocus: { [weak self] in self?.toggleFocus() },
                 pouch: flag("clipboardEnabled", true) ? pouch : nil, activity: log, initialTab: testTab, nowPlaying: nowPlaying, send: { [weak self] in self?.nowPlaying.send($0) }))
+            host.sizingOptions = [.preferredContentSize]; popover.contentViewController = host  // 탭마다 내용 높이에 맞춰 팝오버 크기가 따라간다
             testTab = nil
             popover.behavior = .transient; popover.animates = true
             popover.show(relativeTo: b.bounds, of: b, preferredEdge: .minY)
