@@ -56,3 +56,8 @@
 - 호출기 `tools/gemini.py`(curl, ADC 토큰), 미리보기 `tools/preview.py`. 다음: 햄스터 본체 리뉴얼
 - 디자인 C "도톰"(CA~CF 6색): Gemini 시트 2장(12+16포즈) → `tools/slice.py` → 공용 17색 팔레트 양자화(`art/hamster_c_src/q`) → `hamster_c.py`가 상태별 포즈+동작(통통·숨쉬기·흔들기)으로 22/32 프레임 생성, 색 변형은 몸·음영 2톤 교체. 리터럴 색 템플릿(역할 없음). Swift `familyOf()`로 A/B/C 묶음
 - 디자인 D 시안: 스타일 B 레퍼런스 2장을 `tools/extract_ref.py`로 픽셀 그대로 추출(`art/d_stripe.png`, `art/d_bow.png`) 후 색만 교체한 16종(`art/d_src`). 사용자 승인 대기, 앱 미반영
+
+## v2.7 Now Playing (2026-10-14)
+- 재생 정보: macOS ≤15.3 은 MediaRemote 직접(dlopen), ≥15.4 는 동봉한 mediaremote-adapter(perl + 프레임워크, BSD-3)로 3초마다 `get --now`. 브라우저·Spotify·Music·팟캐스트 공통. 박자(BPM)는 안 옴
+- 팝오버 "재생 중" 탭(아트·제목·진행자·진행 막대·이전/일시정지/다음 = MediaRemote 명령 5/2/4), 재생 중이면 기본 탭. 우클릭 메뉴 둘째 줄 ♪ 제목(클릭하면 탭 열림)
+- 분위기 상태 music(AMBIENT_ORDER 맨 뒤): 햄스터 헤드폰+끄덕(A/B 레이어, C 포즈, D/E `headphones()` 띠+이어컵), 소품 음표(`note`), 장면 칸은 앨범 아트를 코드로 축소(둥근 모서리, AI 생성 없음). 아트 없으면 집

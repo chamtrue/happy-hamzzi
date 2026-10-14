@@ -893,6 +893,7 @@ SCENES["stash"] = SCENES["idle"]
 PROPS["typing"] = PROPS["idle"]; SCENES["typing"] = SCENES["idle"]
 
 PROPS["update"] = PROPS["xmas"]; SCENES["update"] = SCENES["done"]
+PROPS["music"] = PROPS["idle"]; SCENES["music"] = SCENES["idle"]  # 실제 그림은 GEN_* (음표) · 장면은 앱이 앨범 아트로 교체
 
 # ---------- Gemini 생성 원본(art/props_src/*.png) → 상태별 소품 ----------
 # 원본은 28~36px 마스터. target 상자에 맞춰 LANCZOS 축소 후 원본 팔레트로 재양자화(윤곽 유지), n×n 캔버스 중앙.
@@ -955,7 +956,7 @@ GEN_PROPS = {
     "charging": ("battery_charge", "static"), "cpu": ("fire", "toggle"), "rain": ("umbrella", "static"), "snow": ("snowman", "static"),
     "hot": ("fan", "bob"), "wake": ("sun_smile", "bob"), "grumpy": ("raincloud_grey", "bob"), "birthday": ("cake", "bob"),
     "xmas": ("gift", "bob"), "update": ("gift", "bob"), "halloween": ("jack", "bob"), "seollal": ("pouch", "bob"),
-    "chuseok": ("songpyeon", "static"), "summer": ("beachball", "bob"), "stash": ("clipboard", "bob"), "focus": ("tomato_timer", "static"),
+    "chuseok": ("songpyeon", "static"), "music": ("note", "bob"), "summer": ("beachball", "bob"), "stash": ("clipboard", "bob"), "focus": ("tomato_timer", "static"),
 }
 for k in ("idle_groom", "idle_cheeks", "idle_roll", "idle_peek", "typing"): GEN_PROPS[k] = GEN_PROPS["idle"]
 GEN_SCENES = {
@@ -963,7 +964,7 @@ GEN_SCENES = {
     "done": ("popper", ("confetti", 4)), "surprised": ("qmark", "bob"), "faint": ("storm", "toggle"), "dizzy": ("storm", "toggle"),
     "sleep": ("moon", "bob"), "night": ("moon", "bob"), "grumpy": ("moon", "bob"), "halloween": ("moon", "bob"),
     "notify": ("bubble", "static"), "xmas": ("tree", "static"), "chuseok": ("fullmoon", "static"), "summer": ("wave", "static"),
-    "rain": ("raincloud", "toggle"), "snow": ("snowflakes", "flip"), "hot": ("sun", "static"),
+    "rain": ("raincloud", "toggle"), "snow": ("snowflakes", "flip"), "hot": ("sun", "static"), "music": ("house", "static"),
     "meeting_soon": ("calendar", "static"), "meeting": ("calendar", "static"), "pet_meeting": ("calendar", "static"), "focus": ("tomato", "static"),
     "seollal": ("confetti", "flip"), "friday": ("confetti", "flip"), "birthday": ("confetti", "flip"), "pet": ("confetti", "flip"), "update": ("confetti", "flip"),
 }

@@ -307,6 +307,7 @@ def frames(sk):
         "leave": [(base, 20), (blink, 2), (happy(), 10)],
         "night": [(front(sk, eyes="closed", layers=L(art.NIGHTCAP)), 10), (front(sk, eyes="closed", mouth="yawn", layers=L(art.NIGHTCAP)), 6)],
         "friday": [(happy(art.PARTYHAT), 4), (happy(art.PARTYHAT, -1), 4)], "birthday": [(happy(art.PARTYHAT), 4), (happy(art.PARTYHAT, -1), 4)],
+        "music": [(front(sk, eyes="closed", mouth="smile", layers=L(art.HEADPHONES)), 5), (front(sk, eyes="closed", mouth="smile", layers=L(art.HEADPHONES), shift=(0, 1)), 5)],
         "break": [(front(sk, eyes="closed", mouth="smile"), 12), (front(sk, eyes="closed", mouth="smile", shift=(0, 1)), 12)],
         "water": [(front(sk, eyes="closed", mouth="smile"), 12), (front(sk, eyes="closed", mouth="smile", shift=(0, 1)), 12)],
         "battery_low": [(front(sk, eyes="closed", mouth="open", layers=L(art.SWEAT), shift=(0, 1)), 8), (front(sk, eyes="closed", mouth="open", layers=L(art.SWEAT), shift=(0, 3)), 8)],

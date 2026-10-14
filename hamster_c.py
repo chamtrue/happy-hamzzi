@@ -94,6 +94,7 @@ def frames_c(key, n):
         "meeting_soon": shake("hurry", 2), "meeting": breathe("headphones", 20), "pet": bob("hearts", 3), "pet_meeting": bob("hearts", 3),
         "grumpy": shake("grumpy", 2), "wake": [(P("wake"), 8), (sh(P("wake"), dy=-1), 6), (P("idle"), 8)],
         "snow": shake("shiver", 1), "stash": [(P("cheeks"), 12), (P("idle"), 4)],
+        "music": [(P("headphones"), 5), (sh(P("headphones"), dy=1), 5)],
     }
     return out
 
@@ -165,6 +166,21 @@ def wheel_frames(body, n, sprint=False):  # 디자인 A·B 와 같은 쳇바퀴 
 STATIC_BODY = {"stripe_golden": (244, 196, 110), "stripe_grey": (205, 205, 210), "stripe_choco": (160, 112, 80), "stripe_peach": (255, 210, 180), "stripe_sand": (237, 232, 203),
                "bow_cream_red": (255, 246, 220), "bow_pink": (255, 255, 255)}
 
+def headphones(im, n):
+    """D·E 정지 스프라이트에 헤드폰: 머리 윗선을 따라 1px 띠 + 눈 높이 양옆에 이어컵"""
+    a = np.array(im); al = a[:, :, 3] > 0; H, W = al.shape
+    ys, xs = np.where(al); x0, x1 = xs.min(), xs.max(); top = ys.min()
+    eye_y = int(np.mean([FACE[(k, n)][0][1] for k in ("stripe", "bow")]))  # 눈 높이(두 디자인 평균)
+    cw, ch = (2, 4) if n == 32 else (1, 3)
+    for x in range(x0 + W // 6, x1 - W // 6 + 1):  # 띠: 각 열의 맨 위 픽셀 한 칸 위
+        col = np.where(al[:, x])[0]
+        if len(col) and col[0] - 1 >= 0: a[col[0] - 1, x] = (0, 0, 0, 255)
+    for y in range(eye_y - ch // 2, eye_y - ch // 2 + ch):  # 이어컵: 실루엣 바깥쪽 가장자리에 붙여서
+        row = np.where(al[y])[0]
+        if len(row):
+            a[y, max(0, row[0] - cw):row[0]] = (60, 60, 70, 255); a[y, row[-1] + 1:min(W, row[-1] + 1 + cw)] = (60, 60, 70, 255)
+    return Image.fromarray(a, "RGBA")
+
 def frames_static(key, n):
     file = STATIC_SKINS[key][1]; kind = file.split("_")[0]; raw = static_sprite(file, n)
     base = face(raw, kind, n, "open")  # 기본 눈을 D·E 같은 크기로 통일 (리본은 축소로 1px 이 됐었다)
@@ -185,8 +201,9 @@ def frames_static(key, n):
         "sleep": breathe(F("closed"), 14), "night": breathe(F("closed"), 14), "notify": bob(happy, 4), "update": bob(happy, 4),
         "lunch": [(closed_smile, 5), (sh(closed_smile, dy=1), 5)], "leave": bob(F("open", "smile"), 5), "break": breathe(closed_smile, 12), "water": breathe(closed_smile, 12),
         "friday": bob(happy, 4), "birthday": bob(happy, 4), "battery_low": breathe(F("flat", "frown"), 10), "cpu": shake(F("wide")), "hot": breathe(F("closed", "open"), 8),
-        "meeting_soon": shake(F("wide", "open"), 2), "meeting": [(base, 20), (F("closed"), 2)], "pet": bob(happy, 3), "pet_meeting": bob(happy, 3),
+        "meeting_soon": shake(F("wide", "open"), 2), "meeting": [(headphones(base, n), 20), (headphones(F("closed"), n), 2)], "pet": bob(happy, 3), "pet_meeting": bob(headphones(happy, n), 3),
         "grumpy": shake(F("flat", "frown"), 2), "wake": [(F("closed", "yawn"), 8), (sh(F("closed", "yawn"), dy=-1), 6), (base, 8)],
         "snow": shake(F("closed"), 1),
+        "music": [(headphones(closed_smile, n), 5), (sh(headphones(closed_smile, n), dy=1), 5)],
     }
     return out

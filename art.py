@@ -454,6 +454,7 @@ def frames(sk, inline=True):
         "leave": [(base, 20), (blink, 2), (front(sk, eyes="happy", mouth="smile"), 10)],
         "night": [(front(sk, eyes="closed", layers=NIGHTCAP), 10), (front(sk, eyes="closed", mouth="yawn", layers=NIGHTCAP), 6)],
         "friday": [(front(sk, eyes="happy", mouth="smile", layers=PARTYHAT), 4), (front(sk, eyes="happy", mouth="smile", layers=PARTYHAT, shift=(0, -1)), 4)],
+        "music": [(front(sk, eyes="closed", mouth="smile", layers=HEADPHONES), 5), (front(sk, eyes="closed", mouth="smile", layers=HEADPHONES, shift=(0, 1)), 5)],
         "break": [(front(sk, eyes="closed", mouth="smile"), 12), (front(sk, eyes="closed", mouth="smile", shift=(0, 1)), 12)],
         "battery_low": [(front(sk, eyes="closed", mouth="open", layers=SWEAT, shift=(0, 1)), 8), (front(sk, eyes="closed", mouth="open", layers=SWEAT, shift=(0, 2)), 8)],
         "charging": [(eatA, 3), (eatB, 3)],
@@ -487,7 +488,7 @@ def frames(sk, inline=True):
     return out
 
 STATE_NAMES = {"idle": "대기 (씨 먹기)", "working": "작업 중 (쳇바퀴)", "done": "완료", "surprised": "권한 요청", "faint": "에러 (기절)", "sleep": "잠", "notify": "알림 도착",
-    "lunch": "점심 12시", "leave": "퇴근 19시", "night": "밤 23시", "friday": "금요일 오후", "break": "50분 일함, 쉬어", "battery_low": "배터리 20%", "charging": "충전 중",
+    "lunch": "점심 12시", "leave": "퇴근 19시", "night": "밤 23시", "friday": "금요일 오후", "music": "음악 듣는 중", "break": "50분 일함, 쉬어", "battery_low": "배터리 20%", "charging": "충전 중",
     "cpu": "CPU 과부하", "meeting_soon": "회의 5분 전", "meeting": "회의 중", "pet": "쓰다듬기",
     "rain": "비 오는 날", "snow": "눈 오는 날", "hot": "30도 이상", "birthday": "생일", "water": "물 마실 시간", "grumpy": "자는데 깨움 (짜증)", "sprint": "쳇바퀴 전력질주 (클릭)", "pet_meeting": "회의 중 쓰다듬기", "dizzy": "기절에서 부활 (클릭)", "wake": "기상 (기지개)", "focus": "집중 세션", "idle_groom": "대기: 세수", "idle_cheeks": "대기: 볼 채우기", "idle_roll": "대기: 구르기", "idle_peek": "대기: 빼꼼", "stash": "볼주머니에 넣기 (복사)", "typing": "같이 타자 치기 (봉고)", "update": "새 버전 알림 (선물)"}
 

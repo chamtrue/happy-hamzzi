@@ -85,6 +85,7 @@
 
 - 코드: MIT (`LICENSE`)
 - 픽셀 아트(햄스터·소품·코스튬·아이콘, 생성기 안의 픽셀 데이터 포함): CC BY-NC 4.0 (`LICENSE-ART.md`) — 출처 표기, 비상업
+- 동봉 라이브러리: [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) BSD-3-Clause (`app/mediaremote-adapter/LICENSE`) — macOS 15.4 이상에서 Now Playing 정보를 읽는 데 써요
 
 ## 개발자용
 

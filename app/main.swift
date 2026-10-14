@@ -12,13 +12,13 @@ let EVENT_PRIORITY: [String: Int] = ["faint": 8, "surprised": 7, "battery_low": 
                                      "pet": 1, "grumpy": 1, "sprint": 1, "pet_meeting": 1, "dizzy": 1, "stash": 1, "update": 2]
 let EVENT_SECONDS: [String: Double] = ["faint": 6, "surprised": 4, "battery_low": 8, "meeting_soon": 8, "notify": 5, "cpu": 6, "charging": 6, "done": 5, "wake": 4,
                                        "pet": 4, "grumpy": 3, "sprint": 4, "pet_meeting": 4, "dizzy": 3, "stash": 2, "update": 6]
-let AMBIENT_ORDER = ["birthday", "break", "water", "lunch", "leave", "night", "friday", "hot", "rain", "snow"]
+let AMBIENT_ORDER = ["birthday", "break", "water", "lunch", "leave", "night", "friday", "hot", "rain", "snow", "music"]  // music 은 맨 뒤: 다른 분위기보다 낮고 대기보다 높다
 // 감시 앱: 설정 키 → (Dock 이름 후보, 로고, 표시 이름)
 let WATCH_APPS: [(key: String, names: [String], logo: String, label: String)] = [
     ("watchSlack", ["Slack"], "slack", "슬랙"), ("watchKakao", ["KakaoTalk", "카카오톡"], "kakao", "카톡"),
     ("watchOutlook", ["Microsoft Outlook", "Outlook"], "outlook", "아웃룩"), ("watchMail", ["Mail", "메일"], "generic", "메일")]
 let REASONS: [String: String] = [
-    "idle": "대기 중. 해바라기씨 먹는 중이에요", "working": "Claude가 일하는 중 (쳇바퀴)", "surprised": "Claude가 승인을 기다려요 (사이렌)",
+    "idle": "대기 중. 해바라기씨 먹는 중이에요", "music": "음악 듣는 중 (헤드폰·음표)", "working": "Claude가 일하는 중 (쳇바퀴)", "surprised": "Claude가 승인을 기다려요 (사이렌)",
     "faint": "Claude 작업이 실패했어요 (기절)", "done": "Claude 답변이 끝났어요 (체크)", "sleep": "3분 넘게 조용해서 자는 중 (zzz)",
     "meeting_soon": "회의가 5분 안에 시작해요 (알람시계)", "meeting": "회의 중이에요 (헤드폰)", "pet": "쓰다듬어 줘서 좋아해요 (하트)",
     "battery_low": "배터리 20% 이하! (빨간 배터리)", "charging": "충전 시작 (초록 배터리)", "cpu": "CPU 과부하! (불)",
@@ -131,6 +131,65 @@ final class Sheet {
             let c = colors[k]; d[o] = c.0; d[o + 1] = c.1; d[o + 2] = c.2; d[o + 3] = c.3
         } }
         let im = NSImage(size: NSSize(width: size, height: size)); im.addRepresentation(rep); return im
+    }
+}
+
+/// Now Playing. macOS 15.3 까지는 MediaRemote 를 직접 부르고, 15.4 부터는 Apple 이 막아서 Apple 서명 perl 로 도는 mediaremote-adapter(BSD-3, Resources/mediaremote-adapter) 를 거친다
+final class NowPlaying {
+    struct Info { let title: String, artist: String, duration: Double, elapsed: Double, at: Date, playing: Bool; var artwork: NSImage? }
+    var info: Info?
+    private let useAdapter: Bool = { let v = ProcessInfo.processInfo.operatingSystemVersion; return v.majorVersion > 15 || (v.majorVersion == 15 && v.minorVersion >= 4) }()
+    private var timer: Timer?, busy = false
+    private typealias GetInfo = @convention(c) (DispatchQueue, @escaping ([String: Any]) -> Void) -> Void
+    private typealias Send = @convention(c) (Int32, UnsafeRawPointer?) -> Bool
+    private var getInfo: GetInfo?, sendFn: Send?
+    private var script: String? { Bundle.main.resourceURL?.appendingPathComponent("mediaremote-adapter/mediaremote-adapter.pl").path }
+    private var framework: String? { Bundle.main.resourceURL?.appendingPathComponent("mediaremote-adapter/MediaRemoteAdapter.framework").path }
+    func start() {
+        if !useAdapter, let h = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW) {
+            if let p = dlsym(h, "MRMediaRemoteGetNowPlayingInfo") { getInfo = unsafeBitCast(p, to: GetInfo.self) }
+            if let p = dlsym(h, "MRMediaRemoteSendCommand") { sendFn = unsafeBitCast(p, to: Send.self) }
+        }
+        poll(); timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.poll() }
+    }
+    func poll() {
+        if let g = getInfo {
+            g(DispatchQueue.main) { [weak self] d in
+                self?.apply(title: d["kMRMediaRemoteNowPlayingInfoTitle"] as? String, artist: d["kMRMediaRemoteNowPlayingInfoArtist"] as? String, duration: d["kMRMediaRemoteNowPlayingInfoDuration"] as? Double,
+                            elapsed: d["kMRMediaRemoteNowPlayingInfoElapsedTime"] as? Double, playing: (d["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? Double ?? 0) > 0, art: d["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data)
+            }
+            return
+        }
+        guard !busy, let s = script, let f = framework else { return }
+        busy = true
+        DispatchQueue.global().async { [weak self] in
+            let d = NowPlaying.run(["/usr/bin/perl", s, f, "get", "--now"]).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            DispatchQueue.main.async {
+                self?.busy = false
+                self?.apply(title: d?["title"] as? String, artist: d?["artist"] as? String, duration: d?["duration"] as? Double, elapsed: (d?["elapsedTimeNow"] ?? d?["elapsedTime"]) as? Double,
+                            playing: d?["playing"] as? Bool ?? false, art: (d?["artworkData"] as? String).flatMap { Data(base64Encoded: $0) })
+            }
+        }
+    }
+    private func apply(title: String?, artist: String?, duration: Double?, elapsed: Double?, playing: Bool, art: Data?) {
+        guard let title, !title.isEmpty else { info = nil; return }
+        let same = info?.title == title && info?.artist == (artist ?? "")
+        let image = art.flatMap { NSImage(data: $0) } ?? (same ? info?.artwork : nil)   // 아트는 늦게 올 수 있어 같은 곡이면 이전 것을 유지
+        info = Info(title: title, artist: artist ?? "", duration: duration ?? 0, elapsed: elapsed ?? 0, at: Date(), playing: playing, artwork: image)
+    }
+    var elapsedNow: Double { guard let i = info else { return 0 }; let e = i.playing ? i.elapsed + Date().timeIntervalSince(i.at) : i.elapsed; return i.duration > 0 ? min(e, i.duration) : e }
+    /// MediaRemote 명령: 0 재생 · 1 일시정지 · 2 토글 · 4 다음 · 5 이전
+    func send(_ cmd: Int) {
+        if let f = sendFn { _ = f(Int32(cmd), nil) }
+        else if let s = script, let f = framework { DispatchQueue.global().async { _ = NowPlaying.run(["/usr/bin/perl", s, f, "send", String(cmd)]) } }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in self?.poll() }
+    }
+    static func run(_ argv: [String]) -> Data? {
+        let p = Process(); p.executableURL = URL(fileURLWithPath: argv[0]); p.arguments = Array(argv.dropFirst())
+        let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
+        do { try p.run() } catch { return nil }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 10) { if p.isRunning { p.terminate() } }  // 어댑터가 멈추면 10초 뒤 끊는다
+        let data = out.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit(); return p.terminationStatus == 0 ? data : nil
     }
 }
 
@@ -480,6 +539,8 @@ struct AgendaView: View {
     var toggleFocus: () -> Void = {}
     var pouch: Pouch? = nil
     var activity: Activity? = nil
+    var nowPlaying: NowPlaying? = nil
+    var send: (Int) -> Void = { _ in }
     @State var tab = "일정"
     @State var copied: String? = nil
     let byDay: [Date: [EKEvent]]      // 하루 단위로 미리 묶어 두고 본문에서는 조회만 한다
@@ -488,9 +549,9 @@ struct AgendaView: View {
     static let cal = Calendar.current
     static var formatters: [String: DateFormatter] = [:]
     var cal: Calendar { Self.cal }
-    init(events: [EKEvent], granted: Bool, focusRemaining: @escaping () -> Int? = { nil }, focusMinutes: Int = 25, toggleFocus: @escaping () -> Void = {}, pouch: Pouch? = nil, activity: Activity? = nil, initialTab: String? = nil) {
-        self.granted = granted; self.focusRemaining = focusRemaining; self.focusMinutes = focusMinutes; self.toggleFocus = toggleFocus; self.pouch = pouch; self.activity = activity
-        if let t = initialTab { _tab = State(initialValue: t) }
+    init(events: [EKEvent], granted: Bool, focusRemaining: @escaping () -> Int? = { nil }, focusMinutes: Int = 25, toggleFocus: @escaping () -> Void = {}, pouch: Pouch? = nil, activity: Activity? = nil, initialTab: String? = nil, nowPlaying: NowPlaying? = nil, send: @escaping (Int) -> Void = { _ in }) {
+        self.granted = granted; self.focusRemaining = focusRemaining; self.focusMinutes = focusMinutes; self.toggleFocus = toggleFocus; self.pouch = pouch; self.activity = activity; self.nowPlaying = nowPlaying; self.send = send
+        if let t = initialTab { _tab = State(initialValue: t) } else if nowPlaying?.info?.playing == true { _tab = State(initialValue: "재생 중") }  // 재생 중이면 그 탭이 기본
         let cal = Self.cal, today = cal.startOfDay(for: Date())
         byDay = Dictionary(grouping: events) { cal.startOfDay(for: $0.startDate) }
         week = (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: today) }
@@ -521,11 +582,12 @@ struct AgendaView: View {
                 }.padding(8).background(Color.primary.opacity(0.05)).clipShape(RoundedRectangle(cornerRadius: 8))
             }
             Picker("", selection: $tab) {
+                if nowPlaying?.info != nil { Text("재생 중").tag("재생 중") }
                 Text("일정").tag("일정")
                 if pouch != nil { Text("볼주머니").tag("볼주머니") }
                 Text("활동").tag("활동")
             }.pickerStyle(.segmented).labelsHidden()
-            if tab == "볼주머니", let pouch { pouchView(pouch) } else if tab == "활동" { activityView() } else {
+            if tab == "재생 중", let np = nowPlaying { nowPlayingView(np) } else if tab == "볼주머니", let pouch { pouchView(pouch) } else if tab == "활동" { activityView() } else {
             HStack {
                 Text(fmt(month, "yyyy년 M월")).font(.title3.bold())
                 Spacer()
@@ -577,6 +639,33 @@ struct AgendaView: View {
             }
         }.padding(14).frame(width: 340, height: 480, alignment: .top)  // 탭을 바꿔도 팝오버 크기가 안 바뀌므로 높이를 고정한다
     }
+    @ViewBuilder func nowPlayingView(_ np: NowPlaying) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            if let i = np.info {
+                VStack(spacing: 10) {
+                    HStack(alignment: .top, spacing: 10) {
+                        Group { if let a = i.artwork { Image(nsImage: a).resizable().aspectRatio(contentMode: .fill) } else { Image(systemName: "music.note").font(.title).foregroundStyle(.secondary) } }
+                            .frame(width: 72, height: 72).background(Color.primary.opacity(0.06)).clipShape(RoundedRectangle(cornerRadius: 8))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(i.title).font(.headline).lineLimit(3)
+                            if !i.artist.isEmpty { Text(i.artist).font(.subheadline).foregroundStyle(.secondary) }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    if i.duration > 0 {
+                        ProgressView(value: np.elapsedNow, total: i.duration)
+                        HStack { Text(Self.clock(np.elapsedNow)); Spacer(); Text(Self.clock(i.duration)) }.font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                    HStack(spacing: 32) {
+                        Button { send(5) } label: { Image(systemName: "backward.fill") }.accessibilityLabel("이전")
+                        Button { send(2) } label: { Image(systemName: i.playing ? "pause.fill" : "play.fill").font(.title) }.accessibilityLabel(i.playing ? "일시정지" : "재생")
+                        Button { send(4) } label: { Image(systemName: "forward.fill") }.accessibilityLabel("다음")
+                    }.buttonStyle(.borderless).font(.title2)
+                }.padding(.vertical, 4)
+            } else { Text("재생 중인 항목이 없어요").foregroundStyle(.secondary).frame(maxWidth: .infinity, minHeight: 80) }
+        }
+    }
+    static func clock(_ s: Double) -> String { let t = Int(s); return t >= 3600 ? String(format: "%d:%02d:%02d", t / 3600, t / 60 % 60, t % 60) : String(format: "%d:%02d", t / 60, t % 60) }
     @ViewBuilder func activityView() -> some View {
         let a = activity ?? Activity(), today = cal.startOfDay(for: Date())
         let lead = (cal.component(.weekday, from: today) + 5) % 7  // 월요일 시작
@@ -1013,7 +1102,7 @@ struct OnboardingView: View {
 
 // MARK: - 본체
 final class Pet: NSObject {
-    let art = Art(), item = NSStatusBar.system.statusItem(withLength: 22), cal = CalendarWatch(), weather = Weather()
+    let art = Art(), item = NSStatusBar.system.statusItem(withLength: 22), cal = CalendarWatch(), weather = Weather(), nowPlaying = NowPlaying()
     var skin: String { get { defaults.string(forKey: "skin") ?? "SC" } set { defaults.set(newValue, forKey: "skin") } }  // 기본: 리본 햄찌
     var layout: String { get { defaults.string(forKey: "layout") ?? "A" } set { defaults.set(newValue, forKey: "layout") } }
     var watched: [(names: [String], logo: String, label: String)] {
@@ -1067,6 +1156,7 @@ final class Pet: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in self?.autoCheckUpdate() }
         Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in self?.autoCheckUpdate() }
         if defaults.bool(forKey: "onboarded") { cal.requestAccess(); weather.start() }  // 처음이면 튜토리얼의 버튼에서 요청한다
+        nowPlaying.start()
     }
 
     // --- 입력 ---
@@ -1159,6 +1249,7 @@ final class Pet: NSObject {
         if (leave * 60..<night * 60).contains(minutes) { c.insert("leave") }
         if minutes >= night * 60 || minutes < 5 * 60 { c.insert("night") }
         if wd == 6, defaults.object(forKey: "fridayParty") == nil || defaults.bool(forKey: "fridayParty"), (15 * 60..<leave * 60).contains(minutes) { c.insert("friday") }
+        if nowPlaying.info?.playing == true { c.insert("music") }
         ambient = AMBIENT_ORDER.first { c.contains($0) }
     }
 
@@ -1191,6 +1282,7 @@ final class Pet: NSObject {
         var r = REASONS[state] ?? state
         if state == "focus", let m = focusRemaining { r = "집중 세션 중, \(m >= 60 ? "\(m / 60)분" : "\(m)초") 남음 (쳇바퀴)" }
         if state == "notify" { r = "\(WATCH_APPS.first { $0.logo == app }?.label ?? app) 알림이 도착했어요 (봉투)" }
+        if state == "music", let i = nowPlaying.info { r = "♪ \(i.title)" + (i.artist.isEmpty ? "" : " — \(i.artist)") + " (헤드폰·음표)" }
         if let q = queue.first { r += "  · 대기 중: \(REASONS[q.kind]?.components(separatedBy: " (").first ?? q.kind)" }
         if let c = testSeason ?? season, let l = SEASON_LABEL[c] { r += "  · \(l)" }
         if let a = defaults.string(forKey: "accessory"), let l = ACCESSORY_LABEL.first(where: { $0.0 == a })?.1, !a.isEmpty { r += "  · \(l)" }
@@ -1235,7 +1327,10 @@ final class Pet: NSObject {
         if width >= 2 {
             prop.set(focusProp ?? (state == "notify" && width == 2 ? art.logo(app, pre) : (state == "idle" && costume != nil ? art.prop(costume!, pre) : nil) ?? art.prop(state, pre) ?? art.prop("idle", pre)))
         }
-        if width == 3 { scene.set(state == "notify" ? art.logo(app, pre) : (state == "idle" && costume != nil ? art.scene(costume!, pre) : nil) ?? art.scene(state, pre) ?? art.scene("idle", pre)) }
+        if width == 3 {
+            let normal = state == "notify" ? art.logo(app, pre) : (state == "idle" && costume != nil ? art.scene(costume!, pre) : nil) ?? art.scene(state, pre) ?? art.scene("idle", pre)
+            scene.set(state == "music" ? (artworkAnim(cell) ?? normal) : normal)  // 음악 중엔 장면 칸에 앨범 아트
+        }
         var h = hamster.next()
         // 코스튬·봉고·귀 쫑긋을 얹은 프레임은 캐시해서 identity 비교가 유지되게
         let front = !["working", "sprint", "focus"].contains(state) && !["idle_roll", "idle_peek"].contains(hs)
@@ -1286,7 +1381,7 @@ final class Pet: NSObject {
             cal.refresh()
             popover.contentViewController = NSHostingController(rootView: AgendaView(events: cal.all, granted: cal.granted,
                 focusRemaining: { [weak self] in self?.focusRemaining }, focusMinutes: setting("focusMinutes", 25), toggleFocus: { [weak self] in self?.toggleFocus() },
-                pouch: flag("clipboardEnabled", true) ? pouch : nil, activity: log, initialTab: testTab))
+                pouch: flag("clipboardEnabled", true) ? pouch : nil, activity: log, initialTab: testTab, nowPlaying: nowPlaying, send: { [weak self] in self?.nowPlaying.send($0) }))
             testTab = nil
             popover.behavior = .transient; popover.animates = true
             popover.show(relativeTo: b.bounds, of: b, preferredEdge: .minY)
@@ -1312,10 +1407,24 @@ final class Pet: NSObject {
         if let symbol, let im = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) { m.image = im }
         return m
     }
+    var artCache: (key: String, anim: Anim)?
+    /// 앨범 아트를 장면 칸 크기로 (둥근 모서리, 2px 여백). 같은 곡이면 같은 Anim 을 돌려줘 프레임 비교가 유지된다
+    func artworkAnim(_ cell: Int) -> Anim? {
+        guard let i = nowPlaying.info, let a = i.artwork else { return nil }
+        let key = "\(i.title)|\(i.artist)|\(cell)"
+        if let c = artCache, c.key == key { return c.anim }
+        let inner = CGFloat(cell - 4)
+        let im = NSImage(size: NSSize(width: cell, height: cell), flipped: false) { _ in
+            let r = NSRect(x: 2, y: 2, width: inner, height: inner); NSBezierPath(roundedRect: r, xRadius: 3, yRadius: 3).addClip()
+            a.draw(in: r, from: .zero, operation: .sourceOver, fraction: 1); return true
+        }
+        let anim = Anim(frames: [im], ticks: [1]); artCache = (key, anim); return anim
+    }
     func showMenu(anchor: NSView? = nil) {
         let menu = NSMenu(); menu.autoenablesItems = false
         let (st, app) = displayed()
         menu.addItem(item("지금: " + reason(st, app), "info.circle", nil, enabled: false))
+        if let i = nowPlaying.info { menu.addItem(item("♪ " + i.title + (i.artist.isEmpty ? "" : " — " + i.artist), i.playing ? "music.note" : "pause.circle", #selector(openNowPlaying))) }
         if let e = cal.events.first(where: { $0.startDate > Date() }) {
             let m = Int(e.startDate.timeIntervalSinceNow / 60), when = m < 60 ? "\(m)분 후" : m < 24 * 60 ? "\(m / 60)시간 \(m % 60)분 후" : "\(m / 1440)일 후"
             let df = DateFormatter(); df.locale = Locale(identifier: "ko_KR"); df.dateFormat = "M/d a h:mm"
@@ -1357,6 +1466,7 @@ final class Pet: NSObject {
         if let anchor { menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: anchor); return }
         item.menu = menu; item.button?.performClick(nil); item.menu = nil
     }
+    @objc func openNowPlaying() { testTab = "재생 중"; if popover.isShown { popover.performClose(nil) }; handleClick(agendaOnly: true) }
     @objc func pickSkin(_ m: NSMenuItem) { if let k = m.representedObject as? String { skin = k } }
     @objc func pickLayout(_ m: NSMenuItem) { if let k = m.representedObject as? String { layout = k } }
     func autoCheckUpdate() {

@@ -5,6 +5,7 @@ python3 art.py >/dev/null && python3 art32.py >/dev/null
 APP="Happy Hamzzi.app"; rm -rf "$APP" Hamster.app; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp app/Info.plist "$APP/Contents/"; cp app/AppIcon.icns "$APP/Contents/Resources/"
 cp -R frames "$APP/Contents/Resources/"
+cp -R app/mediaremote-adapter "$APP/Contents/Resources/"   # Now Playing 어댑터 (macOS 15.4+ 용, BSD-3)
 swiftc -O -framework AppKit -framework EventKit -framework IOKit -framework CoreLocation -framework SwiftUI -framework ServiceManagement app/main.swift -o "$APP/Contents/MacOS/hamster"
 codesign -s "Happy Hamzzi Dev" --force "$APP" || { echo "서명 실패: Happy Hamzzi Dev 인증서가 키체인에 있어야 해요"; exit 1; }
 echo "built $APP"
