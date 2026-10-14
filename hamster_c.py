@@ -23,6 +23,7 @@ def pose(name, n, body, shade):
     pad = np.pad(al, 1); edge = al & ~(pad[:-2, 1:-1] & pad[2:, 1:-1] & pad[1:-1, :-2] & pad[1:-1, 2:]); rgb[edge] = OUTLINE  # 실루엣 경계 1px 외곽선
     for src, dst in ((BODY, body), (SHADE, shade)):
         m = (np.abs(rgb - np.array(src)).sum(-1) <= 3); rgb[m] = dst
+    fix_eyes(rgb, al, edge, n)
     sp = Image.fromarray(np.dstack([rgb, np.where(al, 255, 0)]).astype(np.uint8), "RGBA")
     out = Image.new("RGBA", (n, n), (0, 0, 0, 0))
     y = (n - sp.height) // 2 if name in CENTER else n - 1 - sp.height
@@ -40,6 +41,37 @@ def spin(im, k, steps=4, inner=0.78):  # 쳇바퀴: 테두리 띠(반지름 78%~
                 t = math.atan2(y - cy, x - cx) - ang; sx, sy = int(round(cx + d * math.cos(t))), int(round(cy + d * math.sin(t)))
                 if 0 <= sx < W and 0 <= sy < H and inner * R <= math.hypot(sx - cx, sy - cy) <= R + 0.5: out[y, x] = a[sy, sx]
     return Image.fromarray(out, "RGBA")
+
+def fix_eyes(rgb, al, edge, n):
+    """축소로 제각각 작아진 눈을 표준 크기로 다시 그린다 (32: 2×3 + 흰 점, 22: 1×2). 감은 눈(납작한 호)은 건드리지 않는다"""
+    from scipy import ndimage
+    dark = al & (rgb.sum(-1) < 200) & ~edge
+    lab, k = ndimage.label(dark, structure=np.ones((3, 3))); H = al.shape[0]
+    cands = []
+    for i, sl in enumerate(ndimage.find_objects(lab)):
+        if sl is None: continue
+        h, w = sl[0].stop - sl[0].start, sl[1].stop - sl[1].start; size = (lab == i + 1).sum()
+        if 1 <= size <= 12 and w <= 4 and h <= 4 and sl[0].start < H * 0.6: cands.append((i + 1, (sl[1].start + sl[1].stop - 1) / 2, (sl[0].start + sl[0].stop - 1) / 2, w, h))
+    best = None
+    for a in cands:
+        for b in cands:
+            dx = b[1] - a[1]
+            if not (3 <= dx <= (12 if n == 32 else 8)) or abs(a[2] - b[2]) > 1.5: continue
+            if a[3] > a[4] + 1 and b[3] > b[4] + 1: continue  # 둘 다 납작 = 감은 눈
+            sc = abs(a[2] - b[2]) + abs(dx - (8 if n == 32 else 5)) * 0.3
+            if best is None or sc < best[0]: best = (sc, a, b)
+    if best is None: return
+    ew, eh = (2, 3) if n == 32 else (1, 2)
+    for _, cx, cy, w, h in best[1:]:
+        x0, y0 = int(round(cx - (ew - 1) / 2)), int(round(cy - (eh - 1) / 2))
+        box = rgb[max(0, y0 - 2):y0 + eh + 2, max(0, x0 - 2):x0 + ew + 2]; abox = al[max(0, y0 - 2):y0 + eh + 2, max(0, x0 - 2):x0 + ew + 2]
+        cols = box[abox & (box.sum(-1) >= 200)]
+        if len(cols):
+            vals, cnt = np.unique(cols, axis=0, return_counts=True); fill = vals[cnt.argmax()]
+            for i in (best[1][0], best[2][0]): rgb[lab == i] = fill
+        rgb[y0:y0 + eh, x0:x0 + ew] = (40, 20, 18)
+        if n == 32: rgb[y0, x0 + ew - 1] = (255, 255, 255)
+        al[y0:y0 + eh, x0:x0 + ew] = True
 
 def sh(im, dx=0, dy=0): return im.transform(im.size, Image.AFFINE, (1, 0, -dx, 0, 1, -dy))
 
@@ -88,37 +120,56 @@ FACE = {("stripe", 32): ((9, 12, 11, 15), (21, 12, 23, 15), (13, 17, 19, 19)), (
 K, W_, PINK = (0, 0, 0), (255, 255, 255), (255, 150, 170)
 
 def face(im, kind, n, eyes="open", mouth="default"):
-    """눈·입만 바꿔 그린다. 원본 픽셀을 지우고(주변 색으로 메움) 상태별 모양을 그림. s=2(32셀)/1(22셀) 배율"""
-    if eyes == "open" and mouth == "default": return im
-    a = np.array(im); eL, eR, mo = FACE[(kind, n)]; s = 2 if n == 32 else 1
-    def fill(box):
-        x0, y0, x1, y1 = box; bg = a[y0, x0 - 1].copy() if a[y0, x0 - 1][3] else a[y1, x0].copy(); a[y0 - (s - 1):y1 + 1, x0 - 1:x1 + 1] = bg
-    def dot(x, y, col=K):
-        a[y:y + s, x:x + s, :3] = col; a[y:y + s, x:x + s, 3] = 255
-    def draw_eye(box):
-        x0, y0, x1, y1 = box; cx, cy = (x0 + x1 - s) // 2, (y0 + y1 - s) // 2
-        if eyes == "closed": [dot(cx + d, cy + s // 2) for d in (-s, 0, s)]
-        elif eyes == "happy": dot(cx - s, cy + s); dot(cx, cy); dot(cx + s, cy + s)
+    """눈·입만 바꿔 그린다(획 1px). 원본 눈·입 자리를 주변 색으로 메우고 상태별 모양을 그림. r=2(32셀)/1(22셀)는 반폭"""
+    a = np.array(im); eL, eR, mo = FACE[(kind, n)]; r = 2 if n == 32 else 1
+    def center(box): x0, y0, x1, y1 = box; return (x0 + x1 - 1) // 2, (y0 + y1 - 1) // 2
+    def clear(cx, cy, hw, hh):
+        reg = a[cy - hh:cy + hh + 1, cx - hw:cx + hw + 1]; cols = reg[(reg[:, :, 3] > 0) & (reg[:, :, :3].sum(-1) > 100)][:, :3]
+        vals, cnt = np.unique(cols, axis=0, return_counts=True); a[cy - hh:cy + hh + 1, cx - hw:cx + hw + 1, :3] = vals[cnt.argmax()]
+    def dot(x, y, col=K): a[y, x, :3] = col; a[y, x, 3] = 255
+    def draw_eye(box, side):
+        cx, cy = center(box); clear(cx, cy, r + 1, r + 1)
+        if eyes == "open":
+            if r == 2: [dot(cx + dx, cy + dy) for dx in (0, 1) for dy in (-1, 0, 1)]   # 2×3 (디자인 D 원본과 같은 크기)
+            else: dot(cx, cy); dot(cx, cy + 1)
+        elif eyes == "closed": [dot(cx + d, cy) for d in range(-r, r + 1)]
+        elif eyes == "happy": dot(cx - r, cy); dot(cx + r, cy); [dot(cx + d, cy + 1) for d in range(-r + 1, r)]  # ︶
         elif eyes == "wide":
-            for dx in (-s, 0, s):
-                for dy in (-s, 0, s): dot(cx + dx, cy + dy, W_ if (dx == 0 and dy == 0 and s == 2) else K)
-        elif eyes == "x": [dot(cx + d, cy + d) for d in (-s, 0, s)] + [dot(cx + d, cy - d) for d in (-s, s)]
-        elif eyes == "flat": [dot(cx + d, cy) for d in (-s, 0, s)]; dot(cx - s, cy - s - (s - 1)); dot(cx, cy - 2 * s)  # 째림 눈썹
+            if r == 2: [dot(cx + dx, cy + dy, W_ if dx == 0 and dy == 0 else K) for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
+            else: [dot(cx + dx, cy + dy) for dx in (0, 1) for dy in (0, 1)]
+        elif eyes == "x": [dot(cx + d, cy + d) for d in (-1, 0, 1)]; [dot(cx + d, cy - d) for d in (-1, 1)]
+        elif eyes == "flat": [dot(cx + d, cy) for d in range(-r, r + 1)]; dot(cx - side * r, cy - 2); dot(cx - side * (r - 1), cy - 1)  # 눈 + 안쪽으로 처진 눈썹
     def draw_mouth(box):
-        x0, y0, x1, y1 = box; cx, cy = (x0 + x1 - s) // 2, y0
-        if mouth == "open": [dot(cx + dx, cy + dy, PINK if (dx == 0 and dy == s) else K) for dx in (-s, 0, s) for dy in (0, s, 2 * s)]
-        elif mouth == "smile": dot(cx - s, cy); dot(cx, cy + s); dot(cx + s, cy)
-        elif mouth == "frown": dot(cx - s, cy + s); dot(cx, cy); dot(cx + s, cy + s)
-        elif mouth == "yawn": [dot(cx + dx, cy + dy, PINK if (dx == 0 and dy in (s, 2 * s)) else K) for dx in (-s, 0, s) for dy in (0, s, 2 * s, 3 * s)]
-    if eyes != "open":
-        for b in (eL, eR): fill(b)
-        for b in (eL, eR): draw_eye(b)
-    if mouth != "default": fill(mo); draw_mouth(mo)
+        cx, cy = center(box); clear(cx, cy, r + 1, r + 1)
+        if mouth == "open":
+            if r == 2: [dot(cx + dx, cy + dy, PINK if dx == 0 and dy == 1 else K) for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
+            else: [dot(cx + dx, cy + dy) for dx in (0, 1) for dy in (0, 1)]
+        elif mouth == "smile":
+            if r == 2: dot(cx - 2, cy); dot(cx, cy); dot(cx + 2, cy); dot(cx - 1, cy + 1); dot(cx + 1, cy + 1)  # ω
+            else: dot(cx - 1, cy); dot(cx + 1, cy); dot(cx, cy + 1)
+        elif mouth == "frown": dot(cx - r, cy + 1); dot(cx + r, cy + 1); [dot(cx + d, cy) for d in range(-r + 1, r)]  # ∩
+        elif mouth == "yawn":
+            if r == 2: [dot(cx + dx, cy + dy, PINK if dx == 0 and 0 <= dy <= 1 else K) for dx in (-1, 0, 1) for dy in (-1, 0, 1, 2)]
+            else: [dot(cx + dx, cy + dy) for dx in (0, 1) for dy in (0, 1, 2)]
+    if eyes != "keep": draw_eye(eL, 1); draw_eye(eR, -1)
+    if mouth != "default": draw_mouth(mo)
     return Image.fromarray(a, "RGBA")
 
+def wheel_frames(body, n, sprint=False):  # 디자인 A·B 와 같은 쳇바퀴 렌더러에 몸 색만 넣는다
+    import art
+    sk = {"cap": body, "belly": (255, 255, 255, 255), "eye": art.K, "ear": art.P, "out": art.K, "name": "D", "sb": True}
+    if n == 32:
+        import art32; return [(art32.wheel(sk, i, sprint), 1) for i in range(8 if sprint else 4)]
+    return [(art.sprint(sk, i) if sprint else art.wheel(sk, i), 1) for i in range(8 if sprint else 4)]
+
+STATIC_BODY = {"stripe_golden": (244, 196, 110), "stripe_grey": (205, 205, 210), "stripe_choco": (160, 112, 80), "stripe_peach": (255, 210, 180), "stripe_sand": (237, 232, 203),
+               "bow_cream_red": (255, 246, 220), "bow_pink": (255, 255, 255)}
+
 def frames_static(key, n):
-    file = STATIC_SKINS[key][1]; kind = file.split("_")[0]; base = static_sprite(file, n)
-    F = lambda e="open", m="default": face(base, kind, n, e, m)
+    file = STATIC_SKINS[key][1]; kind = file.split("_")[0]; raw = static_sprite(file, n)
+    base = face(raw, kind, n, "open")  # 기본 눈을 D·E 같은 크기로 통일 (리본은 축소로 1px 이 됐었다)
+    F = lambda e="open", m="default": face(raw, kind, n, e, m)
+    body = STATIC_BODY[file] + (255,); wheel = wheel_frames(body, n); fast = wheel_frames(body, n, True)
     calm = [(base, 24), (sh(base, dy=1), 4), (base, 10), (F("closed"), 2)]
     bob = lambda im, t=4: [(im, t), (sh(im, dy=-1), t)]
     breathe = lambda im, t=10: [(im, t), (sh(im, dy=1), t // 2)]
@@ -129,7 +180,7 @@ def frames_static(key, n):
         "idle_groom": bob(closed_smile, 3) * 3 + [(base, 8)], "idle_cheeks": [(base, 8), (F("closed"), 14), (base, 6)],
         "idle_roll": shake(F("closed"), 1) * 5 + [(base, 6)],
         "idle_peek": [(sh(base, dy=d), t) for d, t in ((n // 2, 3), (n // 3, 12), (n // 2, 2))] + [(base, 6)],
-        "working": [(sh(base, dy=-1), 1), (base, 1)], "focus": [(sh(base, dy=-1), 1), (base, 1)], "sprint": [(sh(F("wide"), dy=-1), 1), (F("wide"), 1)],  # 제자리 뛰기
+        "working": wheel, "focus": wheel, "sprint": fast,
         "done": bob(happy, 3), "surprised": shake(F("wide", "open")), "faint": breathe(F("x", "open"), 8), "dizzy": shake(F("x", "open"), 3),
         "sleep": breathe(F("closed"), 14), "night": breathe(F("closed"), 14), "notify": bob(happy, 4), "update": bob(happy, 4),
         "lunch": [(closed_smile, 5), (sh(closed_smile, dy=1), 5)], "leave": bob(F("open", "smile"), 5), "break": breathe(closed_smile, 12), "water": breathe(closed_smile, 12),
