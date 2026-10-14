@@ -29,19 +29,6 @@ def pose(name, n, body, shade):
     y = (n - sp.height) // 2 if name in CENTER else n - 1 - sp.height
     out.paste(sp, ((n - sp.width) // 2, max(0, y))); _cache[key] = out; return out
 
-def spin(im, k, steps=4, inner=0.78):  # 쳇바퀴: 테두리 띠(반지름 78%~100%)만 회전, 햄스터는 그대로
-    import math
-    a = np.array(im); al = a[:, :, 3] > 0; ys, xs = np.where(al); x0, x1 = xs.min(), xs.max()
-    R = (x1 - x0) / 2; cx = (x0 + x1) / 2; cy = ys.min() + R; ang = -2 * math.pi / steps * k / 2.4  # 한 바퀴를 천천히
-    out = a.copy(); H, W = al.shape
-    for y in range(H):
-        for x in range(W):
-            d = math.hypot(x - cx, y - cy)
-            if inner * R <= d <= R + 0.5:
-                t = math.atan2(y - cy, x - cx) - ang; sx, sy = int(round(cx + d * math.cos(t))), int(round(cy + d * math.sin(t)))
-                if 0 <= sx < W and 0 <= sy < H and inner * R <= math.hypot(sx - cx, sy - cy) <= R + 0.5: out[y, x] = a[sy, sx]
-    return Image.fromarray(out, "RGBA")
-
 def fix_eyes(rgb, al, edge, n):
     """축소로 제각각 작아진 눈을 표준 크기로 다시 그린다 (32: 2×3 + 흰 점, 22: 1×2). 감은 눈(납작한 호)은 건드리지 않는다"""
     from scipy import ndimage
@@ -86,7 +73,7 @@ def frames_c(key, n):
         "idle_groom": bob("groom", 3) * 3 + [(P("idle"), 8)], "idle_cheeks": [(P("idle"), 8), (P("cheeks"), 14), (P("idle"), 6)],
         "idle_roll": [(sh(P("roll"), dx=d), 2) for d in (0, 1, 2, 3, 2, 1, 0, -1, -2, -1)] + [(P("idle"), 6)],
         "idle_peek": [(sh(P("peek"), dy=d), t) for d, t in ((6, 3), (0, 12), (2, 6), (0, 6), (6, 2))] + [(P("idle"), 6)],
-        "working": [(spin(P("wheel"), k), 2) for k in range(4)], "focus": [(spin(P("wheel"), k), 2) for k in range(4)], "sprint": [(spin(P("wheel"), k), 1) for k in range(4)],
+        "working": wheel_frames(body + (255,), n), "focus": wheel_frames(body + (255,), n), "sprint": wheel_frames(body + (255,), n, True),  # 쳇바퀴는 A·B 렌더러 공용
         "done": bob("pompom_shock", 3), "surprised": shake("hurry"), "faint": breathe("faint", 8), "dizzy": shake("dizzy", 3),
         "sleep": breathe("sleep", 14), "night": breathe("sleep", 14), "notify": bob("wave", 4), "update": bob("partyhat", 4),
         "lunch": [(P("lunch"), 5), (sh(P("lunch"), dy=1), 5)], "leave": bob("bag", 5), "break": breathe("coffee", 12), "water": breathe("water", 12),
