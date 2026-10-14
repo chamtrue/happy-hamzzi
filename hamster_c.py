@@ -64,3 +64,78 @@ def frames_c(key, n):
         "snow": shake("shiver", 1), "stash": [(P("cheeks"), 12), (P("idle"), 4)],
     }
     return out
+
+# ---------- 디자인 D(줄무늬)·E(리본): 레퍼런스 픽셀 그대로, 색만 다른 정지 스프라이트. 모든 상태가 살짝 끄덕이는 대기 ----------
+D_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "art", "d_src")
+STATIC_SKINS = {
+    "DA": ("골든 줄무늬", "stripe_golden"), "DB": ("회색 줄무늬", "stripe_grey"), "DC": ("초코 줄무늬", "stripe_choco"), "DD": ("피치 줄무늬", "stripe_peach"), "DE": ("모래 줄무늬", "stripe_sand"),
+    "EA": ("크림 리본", "bow_cream_red"), "EB": ("분홍 리본", "bow_pink"),
+}
+
+def static_sprite(file, n):
+    im = Image.open(f"{D_SRC}/{file}.png").convert("RGBA"); im = im.crop(im.getbbox()); target = n - 2
+    sc = min(1, target / im.height, target / im.width)
+    a = np.array(im); pal = np.unique(a[a[:, :, 3] > 0][:, :3], axis=0)
+    small = np.array(im.resize((max(1, round(im.width * sc)), max(1, round(im.height * sc))), Image.BOX)).astype(int)
+    idx = ((small[:, :, None, :3] - pal[None, None]) ** 2).sum(-1).argmin(-1); rgb = pal[idx].astype(int); al = small[:, :, 3] > 120
+    pad = np.pad(al, 1); edge = al & ~(pad[:-2, 1:-1] & pad[2:, 1:-1] & pad[1:-1, :-2] & pad[1:-1, 2:]); rgb[edge] = (0, 0, 0)
+    sp = Image.fromarray(np.dstack([rgb, np.where(al, 255, 0)]).astype(np.uint8), "RGBA")
+    out = Image.new("RGBA", (n, n), (0, 0, 0, 0)); out.paste(sp, ((n - sp.width) // 2, n - 1 - sp.height)); return out
+
+# 얼굴 앵커(측정값): 눈 상자 [x0,y0,x1,y1) 와 입 상자. 스프라이트가 고정이라 좌표도 고정
+FACE = {("stripe", 32): ((9, 12, 11, 15), (21, 12, 23, 15), (13, 17, 19, 19)), ("bow", 32): ((11, 15, 12, 16), (20, 15, 21, 16), (14, 18, 18, 20)),
+        ("stripe", 22): ((6, 8, 7, 10), (14, 8, 15, 10), (9, 12, 13, 13)), ("bow", 22): ((7, 10, 8, 11), (13, 10, 14, 11), (9, 12, 12, 13))}
+K, W_, PINK = (0, 0, 0), (255, 255, 255), (255, 150, 170)
+
+def face(im, kind, n, eyes="open", mouth="default"):
+    """눈·입만 바꿔 그린다. 원본 픽셀을 지우고(주변 색으로 메움) 상태별 모양을 그림. s=2(32셀)/1(22셀) 배율"""
+    if eyes == "open" and mouth == "default": return im
+    a = np.array(im); eL, eR, mo = FACE[(kind, n)]; s = 2 if n == 32 else 1
+    def fill(box):
+        x0, y0, x1, y1 = box; bg = a[y0, x0 - 1].copy() if a[y0, x0 - 1][3] else a[y1, x0].copy(); a[y0 - (s - 1):y1 + 1, x0 - 1:x1 + 1] = bg
+    def dot(x, y, col=K):
+        a[y:y + s, x:x + s, :3] = col; a[y:y + s, x:x + s, 3] = 255
+    def draw_eye(box):
+        x0, y0, x1, y1 = box; cx, cy = (x0 + x1 - s) // 2, (y0 + y1 - s) // 2
+        if eyes == "closed": [dot(cx + d, cy + s // 2) for d in (-s, 0, s)]
+        elif eyes == "happy": dot(cx - s, cy + s); dot(cx, cy); dot(cx + s, cy + s)
+        elif eyes == "wide":
+            for dx in (-s, 0, s):
+                for dy in (-s, 0, s): dot(cx + dx, cy + dy, W_ if (dx == 0 and dy == 0 and s == 2) else K)
+        elif eyes == "x": [dot(cx + d, cy + d) for d in (-s, 0, s)] + [dot(cx + d, cy - d) for d in (-s, s)]
+        elif eyes == "flat": [dot(cx + d, cy) for d in (-s, 0, s)]; dot(cx - s, cy - s - (s - 1)); dot(cx, cy - 2 * s)  # 째림 눈썹
+    def draw_mouth(box):
+        x0, y0, x1, y1 = box; cx, cy = (x0 + x1 - s) // 2, y0
+        if mouth == "open": [dot(cx + dx, cy + dy, PINK if (dx == 0 and dy == s) else K) for dx in (-s, 0, s) for dy in (0, s, 2 * s)]
+        elif mouth == "smile": dot(cx - s, cy); dot(cx, cy + s); dot(cx + s, cy)
+        elif mouth == "frown": dot(cx - s, cy + s); dot(cx, cy); dot(cx + s, cy + s)
+        elif mouth == "yawn": [dot(cx + dx, cy + dy, PINK if (dx == 0 and dy in (s, 2 * s)) else K) for dx in (-s, 0, s) for dy in (0, s, 2 * s, 3 * s)]
+    if eyes != "open":
+        for b in (eL, eR): fill(b)
+        for b in (eL, eR): draw_eye(b)
+    if mouth != "default": fill(mo); draw_mouth(mo)
+    return Image.fromarray(a, "RGBA")
+
+def frames_static(key, n):
+    file = STATIC_SKINS[key][1]; kind = file.split("_")[0]; base = static_sprite(file, n)
+    F = lambda e="open", m="default": face(base, kind, n, e, m)
+    calm = [(base, 24), (sh(base, dy=1), 4), (base, 10), (F("closed"), 2)]
+    bob = lambda im, t=4: [(im, t), (sh(im, dy=-1), t)]
+    breathe = lambda im, t=10: [(im, t), (sh(im, dy=1), t // 2)]
+    shake = lambda im, t=2: [(sh(im, dx=-1), t), (sh(im, dx=1), t)]
+    happy = F("happy", "smile"); closed_smile = F("closed", "smile")
+    out = {
+        "idle": calm, "charging": calm, "rain": calm, "typing": [(base, 3), (sh(base, dy=1), 3)], "stash": [(F("open", "smile"), 12), (base, 4)],
+        "idle_groom": bob(closed_smile, 3) * 3 + [(base, 8)], "idle_cheeks": [(base, 8), (F("closed"), 14), (base, 6)],
+        "idle_roll": shake(F("closed"), 1) * 5 + [(base, 6)],
+        "idle_peek": [(sh(base, dy=d), t) for d, t in ((n // 2, 3), (n // 3, 12), (n // 2, 2))] + [(base, 6)],
+        "working": [(sh(base, dy=-1), 1), (base, 1)], "focus": [(sh(base, dy=-1), 1), (base, 1)], "sprint": [(sh(F("wide"), dy=-1), 1), (F("wide"), 1)],  # 제자리 뛰기
+        "done": bob(happy, 3), "surprised": shake(F("wide", "open")), "faint": breathe(F("x", "open"), 8), "dizzy": shake(F("x", "open"), 3),
+        "sleep": breathe(F("closed"), 14), "night": breathe(F("closed"), 14), "notify": bob(happy, 4), "update": bob(happy, 4),
+        "lunch": [(closed_smile, 5), (sh(closed_smile, dy=1), 5)], "leave": bob(F("open", "smile"), 5), "break": breathe(closed_smile, 12), "water": breathe(closed_smile, 12),
+        "friday": bob(happy, 4), "birthday": bob(happy, 4), "battery_low": breathe(F("flat", "frown"), 10), "cpu": shake(F("wide")), "hot": breathe(F("closed", "open"), 8),
+        "meeting_soon": shake(F("wide", "open"), 2), "meeting": [(base, 20), (F("closed"), 2)], "pet": bob(happy, 3), "pet_meeting": bob(happy, 3),
+        "grumpy": shake(F("flat", "frown"), 2), "wake": [(F("closed", "yawn"), 8), (sh(F("closed", "yawn"), dy=-1), 6), (base, 8)],
+        "snow": shake(F("closed"), 1),
+    }
+    return out

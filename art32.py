@@ -346,6 +346,9 @@ if __name__ == "__main__":
     for tname, tsk in all_templates.items():
         meta["templates"][tname] = export_indexed(frames(tsk), f"frames/n32/{tname}")
     import hamster_c
+    for key, (name, _) in hamster_c.STATIC_SKINS.items():  # 디자인 D·E
+        meta["templates"][key] = export_indexed(hamster_c.frames_static(key, N), f"frames/n32/{key}")
+        meta["skins"][key] = {"name": name, "template": key, "pal32": {}}
     for key, (name, _, _) in hamster_c.C_SKINS.items():
         meta["templates"][key] = export_indexed(hamster_c.frames_c(key, N), f"frames/n32/{key}")
         meta["skins"][key] = {"name": name, "template": key, "pal32": {}}

@@ -554,6 +554,10 @@ if __name__ == "__main__":
         inline, plain = frames(tsk, True), frames(tsk, False); plain["done"] = inline["done"]
         meta["templates"][tname] = {"inline": export_indexed(inline, f"frames/{tname}/inline"), "plain": export_indexed(plain, f"frames/{tname}/plain")}
     import hamster_c  # 디자인 C: 생성 포즈 기반, 리터럴 색 템플릿
+    for key, (name, _) in hamster_c.STATIC_SKINS.items():  # 디자인 D·E
+        fr = hamster_c.frames_static(key, N)
+        meta["templates"][key] = {v: export_indexed(fr, f"frames/{key}/{v}") for v in ("inline", "plain")}
+        meta["skins"][key] = {"name": name, "template": key, "pal22": {}}
     for key, (name, _, _) in hamster_c.C_SKINS.items():
         fr = hamster_c.frames_c(key, N)
         meta["templates"][key] = {v: export_indexed(fr, f"frames/{key}/{v}") for v in ("inline", "plain")}
