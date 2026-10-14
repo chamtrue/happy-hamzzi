@@ -345,6 +345,10 @@ if __name__ == "__main__":
         if not sk["template"].startswith(("pat_", "sb_")): all_templates[key] = sk
     for tname, tsk in all_templates.items():
         meta["templates"][tname] = export_indexed(frames(tsk), f"frames/n32/{tname}")
+    import hamster_c
+    for key, (name, _, _) in hamster_c.C_SKINS.items():
+        meta["templates"][key] = export_indexed(hamster_c.frames_c(key, N), f"frames/n32/{key}")
+        meta["skins"][key] = {"name": name, "template": key, "pal32": {}}
     for key, sk in art.SKINS.items():
         pal = {r: list(col) for r, col in palette32(sk).items()} if sk["template"].startswith(("pat_", "sb_")) else {}
         meta["skins"][key] = {"name": sk["name"], "template": sk["template"], "pal32": pal}

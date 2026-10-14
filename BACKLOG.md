@@ -54,3 +54,5 @@
 ## v2.7 소품 리뉴얼 (2026-10-14)
 - 소품·장면·로고 66종을 Vertex AI Gemini(gemini-3-pro-image, 프로젝트 pubg-publishing-div, ADC)로 레퍼런스 스타일(파스텔·갈색 외곽선·셀 음영) 시트 5장 생성 → `tools/slice.py`로 격자 추출 → `art/props_src/*.png` 마스터(28~36px). `props.py` `GEN_PROPS/GEN_SCENES/GEN_LOGOS`가 상태→마스터+애니메이션(bob/static/toggle/flip/dots/sway/교대) 매핑, 22/32 내보내기가 LANCZOS 축소+원본 팔레트 재양자화로 맞춤. 문자 격자 소품은 폴백으로만 남음
 - 호출기 `tools/gemini.py`(curl, ADC 토큰), 미리보기 `tools/preview.py`. 다음: 햄스터 본체 리뉴얼
+- 디자인 C "도톰"(CA~CF 6색): Gemini 시트 2장(12+16포즈) → `tools/slice.py` → 공용 17색 팔레트 양자화(`art/hamster_c_src/q`) → `hamster_c.py`가 상태별 포즈+동작(통통·숨쉬기·흔들기)으로 22/32 프레임 생성, 색 변형은 몸·음영 2톤 교체. 리터럴 색 템플릿(역할 없음). Swift `familyOf()`로 A/B/C 묶음
+- 디자인 D 시안: 스타일 B 레퍼런스 2장을 `tools/extract_ref.py`로 픽셀 그대로 추출(`art/d_stripe.png`, `art/d_bow.png`) 후 색만 교체한 16종(`art/d_src`). 사용자 승인 대기, 앱 미반영

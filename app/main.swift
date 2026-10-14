@@ -28,6 +28,8 @@ let REASONS: [String: String] = [
 func setting(_ key: String, _ def: Int) -> Int { defaults.object(forKey: key) == nil ? def : defaults.integer(forKey: key) }
 let IDLE_VARIANTS: [(String, Int)] = [("idle", 4), ("idle_groom", 1), ("idle_cheeks", 1), ("idle_roll", 1), ("idle_peek", 1)]  // 씨 먹기 50%, 나머지 12.5%씩
 func isFamilyB(_ k: String) -> Bool { k.count == 2 && k.hasPrefix("S") }  // SB·SC = 디자인 B (키 "S" 레드아이 크림은 A)
+func isFamilyC(_ k: String) -> Bool { k.count == 2 && k.hasPrefix("C") }  // CA~CF = 디자인 C (키 "C" 단독은 A)
+func familyOf(_ k: String) -> String { isFamilyB(k) ? "B" : (isFamilyC(k) ? "C" : "A") }
 let ACCESSORY_LABEL: [(String, String)] = [("", "없음"), ("halo", "후광 + 날개"), ("heart", "하트 안기"), ("tomato", "토마토 모자"), ("headphones", "헤드폰"), ("glasses", "빨간 안경"), ("bow", "리본")]
 let SEASON_LABEL = ["xmas": "산타 모자", "halloween": "호박 모자", "seollal": "설빔 호건", "chuseok": "추석 호건", "summer": "튜브 타고 둥실"]
 /// 오늘의 계절 코스튬. 12/1~26 산타, 10/25~31 호박, 7~8월 튜브, 설날·추석은 당일 -7일 ~ +3일 호건
@@ -658,14 +660,14 @@ struct AppearanceTab: View {
     @AppStorage("layout") var layout = "A"
     @AppStorage("typingEnabled") var typing = false
     @AppStorage("accessory") var accessory = ""
-    @State var family = isFamilyB(UserDefaults.standard.string(forKey: "skin") ?? "SC") ? "B" : "A"
+    @State var family = familyOf(UserDefaults.standard.string(forKey: "skin") ?? "SC")
     let art: Art; let preview: (String, String) -> NSImage
-    var familySkins: [(String, String)] { art.skinNames.filter { family == "B" ? isFamilyB($0.0) : !isFamilyB($0.0) } }
+    var familySkins: [(String, String)] { art.skinNames.filter { familyOf($0.0) == family } }
     var body: some View {
         Form {
             Section {
-                Picker("디자인", selection: $family) { Text("A — 클래식 (\(art.skinNames.filter { !isFamilyB($0.0) }.count)종)").tag("A"); Text("B — 햄찌 (\(art.skinNames.filter { isFamilyB($0.0) }.count)종)").tag("B") }.pickerStyle(.segmented)
-                Text(family == "B" ? "참고 그림 그대로의 얼굴을 유지해요. 표정은 바뀌지 않고 소품만 바뀌어요." : "표정·음영이 바뀌는 기본 디자인. 색 24종 + 패턴 5종 모프 포함.").font(.caption).foregroundStyle(.secondary)
+                Picker("디자인", selection: $family) { ForEach([("A", "클래식"), ("B", "햄찌"), ("C", "도톰")], id: \.0) { f, n in Text("\(f) — \(n) (\(art.skinNames.filter { familyOf($0.0) == f }.count)종)").tag(f) } }.pickerStyle(.segmented)
+                Text(family == "B" ? "참고 그림 그대로의 얼굴을 유지해요. 표정은 바뀌지 않고 소품만 바뀌어요." : family == "C" ? "소품과 같은 화풍의 도톰한 햄찌. 상태마다 포즈가 바뀌어요. 노치 모드에서 가장 잘 보여요." : "표정·음영이 바뀌는 기본 디자인. 색 24종 + 패턴 5종 모프 포함.").font(.caption).foregroundStyle(.secondary)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: 6) {
                     ForEach(familySkins, id: \.0) { k, name in
                         VStack(spacing: 4) {
@@ -1327,15 +1329,16 @@ final class Pet: NSObject {
         else { menu.addItem(item("집중 \(setting("focusMinutes", 25))분 시작", "timer", #selector(toggleFocus))) }
         menu.addItem(item("쓰다듬기", "hand.raised", #selector(petNow)))
         menu.addItem(.separator())
-        let skins = NSMenu(), famA = NSMenu(), famB = NSMenu(), morphs = NSMenu()
+        let skins = NSMenu(), famA = NSMenu(), famB = NSMenu(), famC = NSMenu(), morphs = NSMenu()
         for (k, name) in art.skinNames {
             let m = NSMenuItem(title: name, action: #selector(pickSkin(_:)), keyEquivalent: ""); m.target = self; m.state = k == skin ? .on : .off; m.representedObject = k
             if let im = art.hamster(k, "plain", "idle")?.frames.first { m.image = im }
-            (isFamilyB(k) ? famB : (k.count == 1 && k <= "E" ? famA : morphs)).addItem(m)
+            (isFamilyB(k) ? famB : isFamilyC(k) ? famC : (k.count == 1 && k <= "E" ? famA : morphs)).addItem(m)
         }
         famA.addItem(.separator()); let mm = item("골든 햄스터 모프 (\(morphs.items.count)종)", "pawprint", nil); mm.submenu = morphs; famA.addItem(mm)
-        let a = item("디자인 A — 클래식 (\(famA.items.count - 2 + morphs.items.count)종)", "a.circle", nil); a.submenu = famA; a.state = isFamilyB(skin) ? .off : .on; skins.addItem(a)
+        let a = item("디자인 A — 클래식 (\(famA.items.count - 2 + morphs.items.count)종)", "a.circle", nil); a.submenu = famA; a.state = familyOf(skin) == "A" ? .on : .off; skins.addItem(a)
         let b = item("디자인 B — 햄찌 (\(famB.items.count)종)", "b.circle", nil); b.submenu = famB; b.state = isFamilyB(skin) ? .on : .off; skins.addItem(b)
+        let c = item("디자인 C — 도톰 (\(famC.items.count)종)", "c.circle", nil); c.submenu = famC; c.state = isFamilyC(skin) ? .on : .off; skins.addItem(c)
         let layouts = NSMenu(); for (k, name) in [("S", "22px 단독"), ("A", "44px 햄스터 + 소품"), ("B", "66px 햄스터 + 소품 + 장면"), ("N", "노치 모드 (32px)")] { let m = NSMenuItem(title: name, action: #selector(pickLayout(_:)), keyEquivalent: ""); m.target = self; m.state = k == layout ? .on : .off; m.representedObject = k; layouts.addItem(m) }
         let tests = NSMenu(); for s in (art.meta["props"] as? [String: Any] ?? [:]).keys.sorted() { let m = NSMenuItem(title: "\(REASONS[s]?.components(separatedBy: " (").first ?? s)  [\(s)]", action: #selector(testState(_:)), keyEquivalent: ""); m.target = self; m.representedObject = s; tests.addItem(m) }
         let seasons = NSMenu(); for (k, l) in SEASON_LABEL.sorted(by: { $0.key < $1.key }) { let m = NSMenuItem(title: l, action: #selector(testSeasonPick(_:)), keyEquivalent: ""); m.target = self; m.representedObject = k; seasons.addItem(m) }

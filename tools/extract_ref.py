@@ -11,7 +11,10 @@ def extract(f, tol=15):
     im = Image.open(f).convert("RGB"); a = np.array(im).astype(int)
     white = (a > 235).all(axis=2); lab, _ = ndimage.label(white)
     border = set(lab[0]) | set(lab[-1]) | set(lab[:, 0]) | set(lab[:, -1]); border.discard(0)
-    bg = np.isin(lab, list(border)); ys, xs = np.where(~bg); x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
+    bg = np.isin(lab, list(border))
+    # 외곽선 틈(수염·리본 끈)으로 새어 들어온 배경을 막는다: 전경을 닫고 구멍을 메운 뒤 그 밖만 배경
+    fg = ndimage.binary_fill_holes(ndimage.binary_closing(~bg, structure=np.ones((3, 3)), iterations=6))
+    bg = ~fg; ys, xs = np.where(fg); x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
     w, h = x1 - x0, y1 - y0
     d = (np.abs(np.diff(a[y0:y1, x0:x1], axis=1)).sum(axis=2) > 40).sum(axis=0); xs2 = np.where(d > d.max() * 0.15)[0]
     cl = []
