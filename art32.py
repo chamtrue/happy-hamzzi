@@ -351,7 +351,8 @@ if __name__ == "__main__":
     for kind, src, src32 in (("props", props.PROPS, props32.PROPS32), ("scene", props.SCENES, props32.SCENES32)):
         os.makedirs(f"frames/n32/{kind}", exist_ok=True)
         for state, fr in src.items():
-            fr = props.normalize(src32.get(state) or [(up32(im), t) for im, t in fr], 28)
+            gen = props.GEN_PROPS if kind == "props" else props.GEN_SCENES
+            fr = props.gen_frames(gen[state], 28, N) if state in gen else props.normalize(src32.get(state) or [(up32(im), t) for im, t in fr], 28)
             for i, (im, t) in enumerate(fr): im.save(f"frames/n32/{kind}/{state}-{i}.png")
             meta["props" if kind == "props" else "scenes"][state] = [t for _, t in fr]
     for d in ("logo", "costume", "overlay"):
@@ -363,6 +364,6 @@ if __name__ == "__main__":
             for x, y in pts:
                 if 0 <= x < N and 0 <= y < N: px[x, y] = col
         im.save(f"frames/n32/costume/{name}.png")
-    for name, im in props32.LOGOS32.items(): props.normalize(im, 28).save(f"frames/n32/logo/{name}.png")
+    for name, im in props32.LOGOS32.items(): (props.gen(props.GEN_LOGOS[name], 28, N) if name in props.GEN_LOGOS else props.normalize(im, 28)).save(f"frames/n32/logo/{name}.png")
     json.dump(meta, open("frames/n32/meta.json", "w"), ensure_ascii=False)
     print("n32 templates", len(all_templates), "skins", len(meta["skins"]))

@@ -528,9 +528,9 @@ if __name__ == "__main__":
         os.makedirs(os.path.dirname(path), exist_ok=True)
         for i, (im, t) in enumerate(fr): im.save(f"{path}-{i}.png")
         return [t for _, t in fr]
-    for state in props.PROPS:
-        meta["props"][state] = dump(props.normalize(props.PROPS[state], 20), f"frames/props/{state}")
-        meta["scenes"][state] = dump(props.normalize(props.SCENES[state], 20), f"frames/scene/{state}")
+    for state in props.PROPS:  # Gemini 원본(GEN_*)이 있으면 그것, 없으면 문자 격자
+        meta["props"][state] = dump(props.gen_frames(props.GEN_PROPS[state], 20, N) if state in props.GEN_PROPS else props.normalize(props.PROPS[state], 20), f"frames/props/{state}")
+        meta["scenes"][state] = dump(props.gen_frames(props.GEN_SCENES[state], 20, N) if state in props.GEN_SCENES else props.normalize(props.SCENES[state], 20), f"frames/scene/{state}")
     os.makedirs("frames/costume", exist_ok=True)
     for name, layers in COSTUMES.items():
         im = Image.new("RGBA", (N, N), (0, 0, 0, 0)); px = im.load()
@@ -545,7 +545,7 @@ if __name__ == "__main__":
             for x, y in pts: px[x, y] = col
         im.save(f"frames/overlay/{name}.png")
     os.makedirs("frames/logo", exist_ok=True)
-    for app, im in props.LOGOS.items(): props.normalize(im, 20).save(f"frames/logo/{app}.png")
+    for app, im in props.LOGOS.items(): (props.gen(props.GEN_LOGOS[app], 20, N) if app in props.GEN_LOGOS else props.normalize(im, 20)).save(f"frames/logo/{app}.png")
     # 템플릿: 패턴 6 + 수제 스킨(역할 없음, 자기 색 그대로)
     all_templates = dict(TEMPLATES)
     for key, sk in SKINS.items():

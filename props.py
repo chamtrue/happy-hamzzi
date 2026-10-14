@@ -893,3 +893,72 @@ SCENES["stash"] = SCENES["idle"]
 PROPS["typing"] = PROPS["idle"]; SCENES["typing"] = SCENES["idle"]
 
 PROPS["update"] = PROPS["xmas"]; SCENES["update"] = SCENES["done"]
+
+# ---------- Gemini 생성 원본(art/props_src/*.png) → 상태별 소품 ----------
+# 원본은 28~36px 마스터. target 상자에 맞춰 LANCZOS 축소 후 원본 팔레트로 재양자화(윤곽 유지), n×n 캔버스 중앙.
+import os as _os
+import numpy as _np
+_SRC = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "art", "props_src")
+
+def gen(name, target, n):
+    im = Image.open(f"{_SRC}/{name}.png").convert("RGBA"); im = im.crop(im.getbbox())
+    sc = min(target / im.width, target / im.height)
+    if sc < 1:
+        src = _np.array(im); pal = _np.unique(src[src[:, :, 3] > 0][:, :3], axis=0)
+        small = _np.array(im.resize((max(1, round(im.width * sc)), max(1, round(im.height * sc))), Image.LANCZOS)).astype(int)
+        idx = ((small[:, :, None, :3] - pal[None, None]) ** 2).sum(-1).argmin(-1)
+        im = Image.fromarray(_np.dstack([pal[idx], _np.where(small[:, :, 3] > 120, 255, 0)]).astype(_np.uint8), "RGBA")
+    out = Image.new("RGBA", (n, n), (0, 0, 0, 0)); out.paste(im, ((n - im.width) // 2, (n - im.height) // 2)); return out
+
+def main_only(im):  # 가장 큰 연결 요소만 남긴다 (반짝이·김·번개 떼기)
+    from scipy import ndimage
+    a = _np.array(im); lab, k = ndimage.label(a[:, :, 3] > 0)
+    if k < 2: return im
+    big = _np.bincount(lab.ravel())[1:].argmax() + 1; a[lab != big] = 0; return Image.fromarray(a, "RGBA")
+
+def dot_wave(im):  # 점 3개를 차례로 1px 올린다
+    from scipy import ndimage
+    a = _np.array(im); lab, k = ndimage.label(a[:, :, 3] > 0)
+    order = sorted(range(1, k + 1), key=lambda i: _np.where(lab == i)[1].mean())
+    out = []
+    for i in order:
+        b = _np.zeros_like(a); b[lab == i] = a[lab == i]; rest = a.copy(); rest[lab == i] = 0
+        up = Image.fromarray(b, "RGBA").transform(im.size, Image.AFFINE, (1, 0, 0, 0, 1, 1))
+        base = Image.fromarray(rest, "RGBA"); base.alpha_composite(up); out.append((base, 2))
+    return out
+
+def gen_frames(spec, target, n):
+    name, anim = spec; im = gen(name, target, n)
+    if anim == "bob": return [(im, 6), (shift(im, dy=-1), 3)]
+    if anim == "static": return [(im, 10)]
+    if anim == "toggle": return [(im, 4), (main_only(im), 3)]          # 부속물 깜빡임
+    if anim == "flip": return [(im, 4), (im.transpose(Image.FLIP_LEFT_RIGHT), 4)]
+    if anim == "dots": return dot_wave(im)
+    if anim == "sway": return [(im, 3), (shift(im, dx=1), 2), (im, 3), (shift(im, dx=-1), 2)]
+    if isinstance(anim, tuple): return [(im, anim[1]), (gen(anim[0], target, n), anim[1])]  # 두 번째 그림과 교대
+    raise ValueError(anim)
+
+GEN_PROPS = {
+    "idle": ("bowl", "static"), "working": ("dots", "dots"), "sprint": ("dots", "dots"), "done": ("check", "toggle"),
+    "surprised": ("siren_on", ("siren_off", 3)), "sleep": ("zzz", "bob"), "night": ("zzz", "bob"), "notify": ("envelope", "bob"),
+    "pet": ("heart", "bob"), "pet_meeting": ("heart", "bob"), "break": ("coffee", "toggle"), "meeting_soon": ("clock", "sway"),
+    "meeting": ("mic", "static"), "lunch": ("bento", "static"), "leave": ("bag", "bob"), "water": ("water", "bob"),
+    "friday": ("pompom", "sway"), "faint": ("ghost", "bob"), "dizzy": ("dizzy", "flip"), "battery_low": ("battery_low", "bob"),
+    "charging": ("battery_charge", "static"), "cpu": ("fire", "toggle"), "rain": ("umbrella", "static"), "snow": ("snowman", "static"),
+    "hot": ("fan", "bob"), "wake": ("sun_smile", "bob"), "grumpy": ("raincloud_grey", "bob"), "birthday": ("cake", "bob"),
+    "xmas": ("gift", "bob"), "update": ("gift", "bob"), "halloween": ("jack", "bob"), "seollal": ("pouch", "bob"),
+    "chuseok": ("songpyeon", "static"), "summer": ("beachball", "bob"), "stash": ("clipboard", "bob"), "focus": ("tomato_timer", "static"),
+}
+for k in ("idle_groom", "idle_cheeks", "idle_roll", "idle_peek", "typing"): GEN_PROPS[k] = GEN_PROPS["idle"]
+GEN_SCENES = {
+    "idle": ("house", "static"), "working": ("laptop", "static"), "cpu": ("laptop", "static"), "sprint": ("laptop", "static"),
+    "done": ("confetti", "flip"), "surprised": ("qmark", "bob"), "faint": ("storm", "toggle"), "dizzy": ("storm", "toggle"),
+    "sleep": ("moon", "bob"), "night": ("moon", "bob"), "grumpy": ("moon", "bob"), "halloween": ("moon", "bob"),
+    "notify": ("bubble", "static"), "xmas": ("tree", "static"), "chuseok": ("fullmoon", "static"), "summer": ("wave", "static"),
+    "rain": ("raincloud", "toggle"), "snow": ("snowflakes", "flip"), "hot": ("sun", "static"),
+    "meeting_soon": ("calendar", "static"), "meeting": ("calendar", "static"), "pet_meeting": ("calendar", "static"), "focus": ("tomato", "static"),
+    "seollal": ("confetti", "flip"), "friday": ("confetti", "flip"), "birthday": ("confetti", "flip"), "pet": ("confetti", "flip"), "update": ("confetti", "flip"),
+}
+for k in ("idle_groom", "idle_cheeks", "idle_roll", "idle_peek", "typing", "lunch", "leave", "break", "water", "battery_low", "charging", "stash", "wake"):
+    GEN_SCENES[k] = GEN_SCENES["idle"]
+GEN_LOGOS = {"slack": "slack", "kakao": "kakao", "outlook": "outlook", "generic": "bubble"}

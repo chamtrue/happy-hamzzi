@@ -50,3 +50,7 @@
 - 동료 생일 (연락처)
 - 눈·스트레칭 별도 주기 (Recess)
 - Claude 세션 현황 탭, 회의 바로 참여, 해외 시계, 오늘의 Claude 숫자, 회의 중 알림 묶기, 빠른 메모, 배포 업데이트 알림, 눈 따라가기, 먹이 주기
+
+## v2.7 소품 리뉴얼 (2026-10-14)
+- 소품·장면·로고 66종을 Vertex AI Gemini(gemini-3-pro-image, 프로젝트 pubg-publishing-div, ADC)로 레퍼런스 스타일(파스텔·갈색 외곽선·셀 음영) 시트 5장 생성 → `tools/slice.py`로 격자 추출 → `art/props_src/*.png` 마스터(28~36px). `props.py` `GEN_PROPS/GEN_SCENES/GEN_LOGOS`가 상태→마스터+애니메이션(bob/static/toggle/flip/dots/sway/교대) 매핑, 22/32 내보내기가 LANCZOS 축소+원본 팔레트 재양자화로 맞춤. 문자 격자 소품은 폴백으로만 남음
+- 호출기 `tools/gemini.py`(curl, ADC 토큰), 미리보기 `tools/preview.py`. 다음: 햄스터 본체 리뉴얼
