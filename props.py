@@ -927,6 +927,13 @@ def dot_wave(im):  # 점 3개를 차례로 1px 올린다
         base = Image.fromarray(rest, "RGBA"); base.alpha_composite(up); out.append((base, 2))
     return out
 
+def cursor_off(im):  # 초록(커서·잔광) 픽셀을 창 안쪽 바탕색(가장 흔한 어두운 색)으로 덮는다
+    a = _np.array(im); r, g, b, al = a[:, :, 0].astype(int), a[:, :, 1].astype(int), a[:, :, 2].astype(int), a[:, :, 3]
+    cur = (g - _np.maximum(r, b) > 80) & (al > 0); cur[: a.shape[0] // 2] = False   # 아래쪽 선명한 초록만 (제목줄 점·파스텔 막대 제외)
+    dark = a[(al > 0) & (r + g + b < 300)][:, :3]
+    vals, cnt = _np.unique(dark, axis=0, return_counts=True); fill = list(vals[cnt.argmax()]) + [255]
+    a[cur] = fill; return Image.fromarray(a, "RGBA")
+
 def gen_frames(spec, target, n):
     name, anim = spec; im = gen(name, target, n)
     if anim == "bob": return [(im, 6), (shift(im, dy=-1), 3)]
@@ -934,6 +941,7 @@ def gen_frames(spec, target, n):
     if anim == "toggle": return [(im, 4), (main_only(im), 3)]          # 부속물 깜빡임
     if anim == "flip": return [(im, 4), (im.transpose(Image.FLIP_LEFT_RIGHT), 4)]
     if anim == "dots": return dot_wave(im)
+    if anim == "blink": return [(im, 5), (cursor_off(im), 4)]        # 터미널 커서 깜빡임
     if anim == "sway": return [(im, 3), (shift(im, dx=1), 2), (im, 3), (shift(im, dx=-1), 2)]
     if isinstance(anim, tuple): return [(im, anim[1]), (gen(anim[0], target, n), anim[1])]  # 두 번째 그림과 교대
     raise ValueError(anim)
@@ -951,8 +959,8 @@ GEN_PROPS = {
 }
 for k in ("idle_groom", "idle_cheeks", "idle_roll", "idle_peek", "typing"): GEN_PROPS[k] = GEN_PROPS["idle"]
 GEN_SCENES = {
-    "idle": ("house", "static"), "working": ("laptop", "static"), "cpu": ("laptop", "static"), "sprint": ("laptop", "static"),
-    "done": ("confetti", "flip"), "surprised": ("qmark", "bob"), "faint": ("storm", "toggle"), "dizzy": ("storm", "toggle"),
+    "idle": ("house", "static"), "working": ("terminal", "blink"), "cpu": ("terminal", "blink"), "sprint": ("terminal", "blink"),
+    "done": ("popper", ("confetti", 4)), "surprised": ("qmark", "bob"), "faint": ("storm", "toggle"), "dizzy": ("storm", "toggle"),
     "sleep": ("moon", "bob"), "night": ("moon", "bob"), "grumpy": ("moon", "bob"), "halloween": ("moon", "bob"),
     "notify": ("bubble", "static"), "xmas": ("tree", "static"), "chuseok": ("fullmoon", "static"), "summer": ("wave", "static"),
     "rain": ("raincloud", "toggle"), "snow": ("snowflakes", "flip"), "hot": ("sun", "static"),
