@@ -337,6 +337,16 @@ def palette32(sk):
     return {"cap": pastel(sk["cap"]), "belly": pastel(sk["belly"]), "eye": eye32, "nose": eye32,
             "out": K_WARM if sk["out"] == K else sk["out"], "shine": W if sk.get("shine") else eye32}
 
+# 봉고 키보드 32px: 외곽선 + 파스텔 몸체, 키 두 줄(3px 키·1px 틈), 스페이스바, 앞발 4×3 + 외곽선 + 반짝
+KB32 = [(art.KB_OUT, {(x, 22) for x in range(4, 28)} | {(x, 28) for x in range(4, 28)} | {(4, y) for y in range(22, 29)} | {(27, y) for y in range(22, 29)}),
+        (art.KB_BODY, {(x, y) for x in range(5, 27) for y in range(23, 28)}),
+        (art.KB_KEY, {(x, y) for x in range(6, 26) for y in (23, 24) if (x - 6) % 4 != 3} | {(x, y) for x in list(range(6, 9)) + list(range(10, 22)) + list(range(23, 26)) for y in (26, 27)}),  # 키 두 줄, 둘째 줄 가운데는 스페이스바
+        (art.KB_KEYD, {(x, 24) for x in range(6, 26) if (x - 6) % 4 != 3} | {(x, 27) for x in list(range(6, 9)) + list(range(10, 22)) + list(range(23, 26))}),  # 키 아랫면 그늘
+        (art.KB_GAP, {(x, y) for x in range(9, 26, 4) for y in (23, 24)} | {(x, 25) for x in range(5, 27)} | {(x, y) for x in (9, 22) for y in (26, 27)})]       # 키 사이 틈
+def paw32(x0, y0): return [(art.KB_OUT, {(x, y0 - 1) for x in range(x0, x0 + 4)} | {(x, y0 + 3) for x in range(x0, x0 + 4)} | {(x0 - 1, y) for y in range(y0, y0 + 3)} | {(x0 + 4, y) for y in range(y0, y0 + 3)}),
+                            (art.PAW_P, {(x, y) for x in range(x0, x0 + 4) for y in range(y0, y0 + 3)}), (W, {(x0 + 2, y0), (x0 + 3, y0)})]
+OVERLAYS32 = {"type_l": KB32 + paw32(7, 22) + paw32(20, 17), "type_r": KB32 + paw32(7, 17) + paw32(20, 22)}
+
 if __name__ == "__main__":
     import props32
     shutil.rmtree("frames/n32", ignore_errors=True)
@@ -366,6 +376,12 @@ if __name__ == "__main__":
     for d in ("logo", "costume", "overlay"):
         os.makedirs(f"frames/n32/{d}", exist_ok=True)
         for f in os.listdir(f"frames/{d}"): up32(Image.open(f"frames/{d}/{f}")).save(f"frames/n32/{d}/{f}")
+    for name, layers in OVERLAYS32.items():  # 봉고 키보드·앞발은 32px 전용으로 다시 그림 (확대본 대체)
+        im = Image.new("RGBA", (N, N), (0, 0, 0, 0)); px = im.load()
+        for col, pts in layers:
+            for x, y in pts:
+                if 0 <= x < N and 0 <= y < N: px[x, y] = col
+        im.save(f"frames/n32/overlay/{name}.png")
     for name, layers in ACCESSORIES32.items():
         im = Image.new("RGBA", (N, N), (0, 0, 0, 0)); px = im.load()
         for col, pts in layers:

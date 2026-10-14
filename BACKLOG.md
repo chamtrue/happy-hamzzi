@@ -61,3 +61,5 @@
 - 재생 정보: macOS ≤15.3 은 MediaRemote 직접(dlopen), ≥15.4 는 동봉한 mediaremote-adapter(perl + 프레임워크, BSD-3)로 3초마다 `get --now`. 브라우저·Spotify·Music·팟캐스트 공통. 박자(BPM)는 안 옴
 - 팝오버 "재생 중" 탭(아트·제목·진행자·진행 막대·이전/일시정지/다음 = MediaRemote 명령 5/2/4), 재생 중이면 기본 탭. 우클릭 메뉴 둘째 줄 ♪ 제목(클릭하면 탭 열림)
 - 분위기 상태 music(AMBIENT_ORDER 맨 뒤): 햄스터 헤드폰+끄덕(A/B 레이어, C 포즈, D/E `headphones()` 띠+이어컵), 소품 음표(`note`), 장면 칸은 앨범 아트를 코드로 축소(둥근 모서리, AI 생성 없음). 아트 없으면 집
+- 봉고 타자: 키보드·앞발을 소품 화풍으로(갈색 외곽선·라벤더 몸체·흰 키·틈), 32px 는 `art32.py OVERLAYS32` 로 따로 그림(확대본 아님). 디자인 C 의 typing 은 idle 포즈 + 오버레이(포즈 속 키보드와 이중 방지)
+- 팝오버: 탭마다 내용 높이(`sizingOptions = .preferredContentSize`), 일정 목록만 250pt 스크롤

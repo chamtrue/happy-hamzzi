@@ -327,12 +327,16 @@ TUBE_EDGE = {(x, 19) for x in range(3, 19)} | {(0, 12), (21, 12), (1, 12), (20, 
 WAVES = {(x, y) for y in (20, 21) for x in range(22)} | {(x, 19) for x in (0, 1, 2, 19, 20, 21)}
 SUMMER = [(c(0.55, 0.78, 0.95), WAVES), (W, {(2, 20), (8, 20), (14, 20), (20, 20)}),
           (K, TUBE_EDGE), (c(0.98, 0.55, 0.20), TUBE_RING), (W, TUBE_STRIPE)]
-# 봉고 햄스터: 키보드 + 앞발 (키 입력마다 왼발/오른발 번갈아 내려간다)
-KEYBOARD = [(K, {(x, 15) for x in range(3, 19)} | {(x, 19) for x in range(3, 19)} | {(3, y) for y in range(15, 20)} | {(18, y) for y in range(15, 20)}),
-            (c(0.80, 0.80, 0.78), {(x, y) for x in range(4, 18) for y in range(16, 19)}),
-            (c(0.55, 0.55, 0.53), {(x, y) for x in (6, 9, 12, 15) for y in (16, 17, 18)} | {(x, 17) for x in range(4, 18)})]
-def paw(x0, y0): return [(K, {(x0 - 1, y0), (x0 + 3, y0), (x0 - 1, y0 + 1), (x0 + 3, y0 + 1), (x0, y0 - 1), (x0 + 1, y0 - 1), (x0 + 2, y0 - 1), (x0, y0 + 2), (x0 + 1, y0 + 2), (x0 + 2, y0 + 2)}),
-                          (P, {(x0, y0), (x0 + 1, y0), (x0 + 2, y0), (x0, y0 + 1), (x0 + 1, y0 + 1), (x0 + 2, y0 + 1)})]
+# 봉고 햄스터: 키보드 + 앞발 (키 입력마다 왼발/오른발 번갈아 내려간다). 소품과 같은 화풍: 따뜻한 갈색 외곽선 + 파스텔 키
+KB_OUT, KB_BODY, KB_KEY, KB_KEYD, KB_GAP = c(0.30, 0.22, 0.18), c(0.70, 0.66, 0.84), c(0.99, 0.98, 1.0), c(0.84, 0.80, 0.93), c(0.50, 0.45, 0.66)
+KEYBOARD = [(KB_OUT, {(x, 15) for x in range(3, 19)} | {(x, 19) for x in range(3, 19)} | {(3, y) for y in range(15, 20)} | {(18, y) for y in range(15, 20)}),
+            (KB_BODY, {(x, y) for x in range(4, 18) for y in range(16, 19)}),
+            (KB_KEY, {(x, 16) for x in range(4, 18)} | {(x, 18) for x in range(7, 15)}),           # 키 한 줄 + 스페이스바
+            (KB_KEYD, {(x, 17) for x in range(4, 18)}),                                                # 키 아래 그늘
+            (KB_GAP, {(x, y) for x in (6, 9, 12, 15) for y in (16, 17)})]                               # 키 사이 틈
+PAW_P = c(0.99, 0.75, 0.80)
+def paw(x0, y0): return [(KB_OUT, {(x0 - 1, y0), (x0 + 3, y0), (x0 - 1, y0 + 1), (x0 + 3, y0 + 1), (x0, y0 - 1), (x0 + 1, y0 - 1), (x0 + 2, y0 - 1), (x0, y0 + 2), (x0 + 1, y0 + 2), (x0 + 2, y0 + 2)}),
+                          (PAW_P, {(x0, y0), (x0 + 1, y0), (x0 + 2, y0), (x0, y0 + 1), (x0 + 1, y0 + 1), (x0 + 2, y0 + 1)}), (W, {(x0 + 2, y0)})]  # 발바닥 반짝
 TYPE_L = KEYBOARD + paw(5, 15) + paw(14, 12)   # 왼발 내림, 오른발 올림
 TYPE_R = KEYBOARD + paw(5, 12) + paw(14, 15)   # 왼발 올림, 오른발 내림
 OVERLAYS = {"type_l": TYPE_L, "type_r": TYPE_R}

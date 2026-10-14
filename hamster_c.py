@@ -69,7 +69,7 @@ def frames_c(key, n):
     shake = lambda name, t=2: [(sh(P(name), dx=-1), t), (sh(P(name), dx=1), t)]
     idle = [(P("idle"), 24), (sh(P("idle"), dy=1), 4)]
     out = {
-        "idle": idle, "charging": idle, "rain": idle, "typing": [(P("typing"), 3), (sh(P("typing"), dy=1), 3)],
+        "idle": idle, "charging": idle, "rain": idle, "typing": idle,  # 키보드는 앱이 봉고 오버레이로 얹는다 (포즈에 키보드가 또 있으면 이중)
         "idle_groom": bob("groom", 3) * 3 + [(P("idle"), 8)], "idle_cheeks": [(P("idle"), 8), (P("cheeks"), 14), (P("idle"), 6)],
         "idle_roll": [(sh(P("roll"), dx=d), 2) for d in (0, 1, 2, 3, 2, 1, 0, -1, -2, -1)] + [(P("idle"), 6)],
         "idle_peek": [(sh(P("peek"), dy=d), t) for d, t in ((6, 3), (0, 12), (2, 6), (0, 6), (6, 2))] + [(P("idle"), 6)],
