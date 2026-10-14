@@ -635,7 +635,7 @@ struct AgendaView: View {
                         }
                     }
                 }
-            }.frame(maxHeight: 250)  // 일정 목록만 스크롤, 나머지는 내용 높이
+            }.defaultScrollAnchor(.top).frame(maxHeight: 250, alignment: .top)  // 일정 목록만 스크롤(처음엔 오늘이 맨 위), 나머지는 내용 높이
             }
         }.padding(14).frame(width: 340, alignment: .top)  // 높이는 내용대로: 호스팅 컨트롤러가 preferredContentSize 로 팝오버를 늘였다 줄인다
     }
