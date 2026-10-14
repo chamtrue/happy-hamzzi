@@ -1443,6 +1443,7 @@ final class Pet: NSObject {
         case "checkupdate": updater.check(manual: true)
         case "installupdate": updater.install()
         case "state": testState = arg; testUntil = Date().addingTimeInterval(8)
+        case "skin": if art.skins[arg] != nil { skin = arg; art.cache.removeAll() }  // 테스트: 앱 안에서 스킨 전환 (defaults 캐시 경쟁 회피)
         case "season": testSeason = arg; testSeasonUntil = Date().addingTimeInterval(10)
         default: break
         }
